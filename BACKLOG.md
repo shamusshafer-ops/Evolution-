@@ -2,7 +2,7 @@
 
 | # | Item | Why | Size | Status |
 |---|---|---|---|---|
-|1| Predation / contest competition | Gives size a payoff proportional to its cost; enables stable polymorphism | M | Scoped in ROADMAP |
+|1| Predation | Gives size a payoff proportional to its cost. Shipped: size 0.67 -> 1.80. Produced bistability (two alternative stable states) rather than the predicted polymorphism | M | **Shipped 2026-07-30** |
 |2| Lineage tracking + phylogeny view | Shows individuals, complements the population-level ribbon | M | Scoped in ROADMAP |
 |3| Share a run (seed + scenario string) | Determinism makes this nearly free | S | Scoped in ROADMAP |
 |4| Niche partitioning: food types + heritable diet trait | The other half of Gause — proves coexistence, and gives species somewhere to diverge to | M | **Shipped 2026-07-29** |
@@ -23,3 +23,5 @@
 |20| Season UI indicator (current phase readout) | Deferred from M4 for time; mechanism works, just no visible readout of where in the cycle a run is | S | Backlog |
 |21| Proper per-field shock stacking | Currently overlapping patch-shocks are refused rather than composed; would need per-field ownership tracking to do correctly | M | Backlog |
 |22| Investigate the seasonal boom-bust lag cycle further | Found unexpectedly during M4 -- reproductive lag causing population overshoot-crash from smooth periodic forcing alone. Worth deliberately tuning/studying rather than leaving as an observed side-effect | M | Backlog |
+|23| Contest competition (the other half of #1) | Share contested food by size^2 instead of first-come. Cheaper than predation and a different mechanism for the same trait; worth comparing against predation's bistable outcome | S | Backlog |
+|24| Hysteresis test for the predation bistability | If a population in the large-bodied state is pushed small by a shock, does it stay small? True hysteresis would be a strong, teachable result | S | Backlog |

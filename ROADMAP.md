@@ -3,6 +3,67 @@
 `ROADMAP.md` is forward-looking and editable in place. Completed session writeups go in
 `ROADMAP-HISTORY.md` (created on first entry), never here.
 
+## Status
+
+**M5 shipped (2026-07-30).** Predation. 154 tests.
+
+### Size is finally selectable — the oldest open problem, fixed
+
+Size carried the steepest metabolic cost of any trait while buying only a marginally
+wider bite radius, so it was never selectable: the measured famine-vs-glut difference
+was ~0.03 with an unstable sign, and `test-selection.js` deliberately asserted no
+direction on it. Predation gives size a payoff that scales WITH the trait.
+
+| | mean size |
+|---|---|
+| Temperate (no predation) | 0.67 |
+| Predation (identical twin scenario) | **1.80** |
+
+A 0.5+ absolute difference against the old ~0.03 noise floor. Size plateaus at
+~1.9-2.1 against a trait ceiling of 3.2 and one seed came back DOWN, so it is an
+equilibrium rather than the runaway ratchet that was the main design risk.
+
+### The predicted result did not happen. The measured one is better.
+
+The prediction going in was a stable size POLYMORPHISM — small-and-cheap coexisting
+with large-and-predatory in one population. That did not occur: the size distribution
+is unimodal in every run, just shifted up (histogram `[0,0,0,0,9,85,25,3,0,0]`).
+Everyone converged on "be too big to be prey" because being small carried all of the
+risk and none of the protection.
+
+Adding a size refuge grounded in **optimal foraging theory** (predators ignore prey
+below a profitability threshold — real predators do exactly this) did not produce
+polymorphism either. Investigating WHY produced the actual finding:
+
+**Bistability — two alternative stable states.** The refuge is a separate fitness
+peak the population cannot REACH from a normal start, because the path crosses a
+valley where you are large enough to be worth hunting but too small to hunt back.
+
+| start size | outcome after 25,000 ticks |
+|---|---|
+| 0.45 | stays ~0.45-0.51, population **~500** |
+| 0.55 | falls to ~0.45-0.48, population ~400-520 |
+| **0.75** | **SPLITS BY SEED — 0.47 (pop 502) or 2.11 (pop 74)** |
+| 1.00 | climbs to ~1.5-2.0, population ~120-176 |
+
+0.75 sits on the separatrix: the same starting size lands in either basin depending
+on the seed. Note also the ~5x carrying-capacity difference between the two states
+from body size alone — large organisms cost more metabolically, so identical food
+supports far fewer of them.
+
+Alternative stable states, hysteresis, and unreachable fitness peaks are all real
+evolutionary and ecological phenomena. This is a better outcome than the polymorphism
+originally scoped, and it was found by investigating a negative result rather than
+tuning until the predicted answer appeared.
+
+### Scoping decision that protected everything else
+
+Predation is behind a per-scenario `cfg.predation` flag, ON only in the `predation`
+scenario (an exact twin of `temperate` in every other respect). Turning it on
+globally would have silently invalidated every M1-M4 measurement and the tests
+pinning them. `test-predation.js` explicitly asserts predation is OFF in temperate,
+oasis, and archipelago, and that zero predation events occur when the flag is off.
+
 ## Standing practice — in-app changelog
 
 Every future change that alters what the sim DOES gets a `CHANGELOG` entry in

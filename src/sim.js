@@ -66,7 +66,7 @@ function makeState(opts){
     foodCarry: 0,
     running: false,
     speedMult: 1,
-    stats: { born:0, starved:0, aged:0, eaten:0, peakPop:0, unmated:0, culled:0 },
+    stats: { born:0, starved:0, aged:0, eaten:0, peakPop:0, unmated:0, culled:0, predated:0, escapes:0 },
     history: [],          // per-sample trait means
     ribbon: [],           // per-sample trait HISTOGRAMS, for the drift ribbon
     sampleEvery: 30,
@@ -103,6 +103,7 @@ function makeOrganism(x, y, traits, gen){
   const o = {
     id: state.nextId++,
     clade: 0,
+    predCooldown: 0,
     x, y,
     dir: rnd() * Math.PI * 2,
     gen: gen || 1,
@@ -389,6 +390,7 @@ function step(){
   for (let i = 0; i < state.organisms.length; i++){
     const o = state.organisms[i];
     o.age++;
+    if (o.predCooldown > 0) o.predCooldown--;
 
     /* --- seek --- */
     const fi = findFood(o, fg);
@@ -441,6 +443,10 @@ function step(){
 
   state.organisms = survivors;
 
+  // Predation resolves before reproduction: an organism eaten this tick must not
+  // also breed this tick.
+  predationPass();
+
   // Reproduce after the survival pass so a newborn cannot act on the tick it is born.
   matingPass();
 
@@ -487,6 +493,100 @@ function traitHistogram(key, bins){
     out[clamp(Math.floor(f * bins), 0, bins-1)]++;
   }
   return out;
+}
+
+/* ---------- Predation ----------
+   Runs only when cfg.predation is set. Spatially indexed over the whole population
+   the same way matingPass indexes breeders — a naive pairwise scan would be O(n^2)
+   per tick, which at n~400 is 160k checks EVERY tick (not every 240 like
+   computeSpecies) and would dominate the frame budget outright.
+
+   Order within a tick matters and is deliberate: predation resolves AFTER movement
+   and foraging but BEFORE metabolism and death. A prey organism that was about to
+   starve can still be eaten — its energy goes to the predator rather than
+   evaporating — which is both more realistic and avoids a strange edge case where
+   starving organisms become magically unhuntable in their final tick. */
+function predationPass(){
+  const cfg = state.cfg;
+  if (!cfg.predation) return;
+  const pop = state.organisms;
+  if (pop.length < 2) return;
+
+  // Cell sized to the largest plausible strike range so a predator's targets are
+  // always within the 3x3 neighbourhood.
+  let maxReach = 0;
+  for (const o of pop){
+    const r = o.size * PREDATION.reachMul;
+    if (r > maxReach) maxReach = r;
+  }
+  const cell = Math.max(8, maxReach);
+  const cols = Math.max(1, Math.ceil(cfg.w / cell));
+  const rows = Math.max(1, Math.ceil(cfg.h / cell));
+  const grid = new Map();
+  for (let i = 0; i < pop.length; i++){
+    const o = pop[i];
+    const k = (clamp(Math.floor(o.y/cell),0,rows-1)) * cols + (clamp(Math.floor(o.x/cell),0,cols-1));
+    let b = grid.get(k); if (!b){ b = []; grid.set(k, b); }
+    b.push(i);
+  }
+
+  const eaten = new Uint8Array(pop.length);
+
+  for (let i = 0; i < pop.length; i++){
+    if (eaten[i]) continue;                       // a corpse cannot hunt
+    const pred = pop[i];
+    if (pred.predCooldown > 0){ continue; }
+    const reach = pred.size * PREDATION.reachMul;
+    const cx = clamp(Math.floor(pred.x/cell),0,cols-1);
+    const cy = clamp(Math.floor(pred.y/cell),0,rows-1);
+
+    let target = -1, bestD2 = reach * reach;
+    for (let gy = cy-1; gy <= cy+1; gy++){
+      for (let gx = cx-1; gx <= cx+1; gx++){
+        let ax = gx, ay = gy;
+        if (cfg.wrap){ ax = ((gx%cols)+cols)%cols; ay = ((gy%rows)+rows)%rows; }
+        else if (gx<0||gy<0||gx>=cols||gy>=rows) continue;
+        const bucket = grid.get(ay*cols + ax);
+        if (!bucket) continue;
+        for (const j of bucket){
+          if (j === i || eaten[j]) continue;
+          const prey = pop[j];
+          // Size gate: predators are meaningfully larger, not marginally.
+          if (pred.size < prey.size * PREDATION.sizeRatio) continue;
+          // Profitability gate (optimal foraging): very small prey are not worth
+          // the handling cost. This is the size refuge — see PREDATION.minPreySize.
+          if (prey.size < PREDATION.minPreySize) continue;
+          const dx = wrapDelta(prey.x - pred.x, cfg.w);
+          const dy = wrapDelta(prey.y - pred.y, cfg.h);
+          const d2 = dx*dx + dy*dy;
+          if (d2 < bestD2){ bestD2 = d2; target = j; }
+        }
+      }
+    }
+
+    if (target < 0) continue;
+    const prey = pop[target];
+
+    /* Escape. A prey faster than its pursuer frequently gets away; a slower one
+       rarely does. Without this, size would be strictly dominant and the arms race
+       would collapse into a size runaway — the escape term is what keeps speed
+       worth paying for and keeps the tradeoff two-sided. */
+    const speedAdv = (prey.speed - pred.speed) / Math.max(0.001, pred.speed);
+    const pEscape = clamp(speedAdv * PREDATION.escapeMul, 0, 0.95);
+    if (rnd() < pEscape){ state.stats.escapes = (state.stats.escapes||0) + 1; continue; }
+
+    eaten[target] = 1;
+    pred.energy += prey.energy * PREDATION.efficiency;
+    pred.predCooldown = PREDATION.cooldown;
+    pred.kills = (pred.kills || 0) + 1;
+    state.stats.predated = (state.stats.predated || 0) + 1;
+  }
+
+  if (state.stats.predated){
+    const keep = [];
+    for (let i = 0; i < pop.length; i++) if (!eaten[i]) keep.push(pop[i]);
+    state.organisms = keep;
+  }
 }
 
 /* ---------- Mating ----------

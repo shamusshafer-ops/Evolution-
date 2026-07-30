@@ -14,6 +14,8 @@ const VERSION = '0.1.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-07-30', tag:'M5', title:'Predation — and two stable states',
+    text:'Large organisms can now eat smaller ones (Predation scenario only, so every earlier result stays valid). This finally makes size worth its cost: mean size 0.67 without predation vs 1.80 with, against a difference of ~0.03 before. The predicted outcome — small and large coexisting in one population — did NOT happen. What happened instead is more interesting: two alternative stable states. Start small and you stay small, hiding below the size predators bother hunting, at ~5x the population. Start large and you climb to ~2.0 and stay there, safe by being big. The middle is uninhabitable — big enough to hunt, too small to fight back. At a starting size of 0.75 the same run lands in either state depending on the seed.' },
   { date:'2026-07-30', tag:'M4', title:'Shocks, seasons, migration',
     text:'Player-triggered Drought/Bloom/Die-off events. Food supply now oscillates in the Seasonal scenario. The Archipelago scenario adds a second, independent mode of speciation — allopatric (geographic isolation alone, no dietary preference) — alongside the sympatric speciation Oasis already showed. Measured: 7/10 seeds speciate, geographic sorting mean 0.752.' },
   { date:'2026-07-30', tag:'fix', title:'Auto-pause is no longer silent',
@@ -208,6 +210,68 @@ const LIFE = {
   maxPop:        1400,     // hard ceiling — protects framerate on phones
 };
 
+/* ---------- Predation ----------
+   The fix for the oldest open problem in this model: size has been below the noise
+   floor since M1. It carries the steepest metabolic cost of any trait (mass^0.75
+   basal, and mass scales as size^3) while its only payoff was a marginally wider
+   bite radius. Nothing that expensive with that little return can be selected for,
+   and the measured famine-vs-glut size difference (~0.03, sign-unstable between
+   builds) reflected exactly that.
+
+   Predation gives size a payoff that scales WITH the trait, which is what a real
+   tradeoff needs.
+
+   Grounded in real predator-prey ecology:
+
+     sizeRatio   Predators are meaningfully larger than their prey, not marginally.
+                 Empirical predator/prey body-MASS ratios cluster well above 1 across
+                 terrestrial and marine systems (Brose et al. 2006 and the broader
+                 body-size-ratio literature). Because mass scales as size^3 here, a
+                 size ratio of 1.35 is a mass ratio of ~2.5 — comfortably inside the
+                 real range without demanding the extreme ratios of specialist
+                 megafauna.
+
+     efficiency  Energy captured from prey. Deliberately NOT labelled as Lindeman's
+                 ~10% trophic efficiency: that figure describes energy transfer
+                 between whole trophic LEVELS over time (production/production), not
+                 the fraction of one individual's standing energy a single predation
+                 event captures. Conflating the two is a common error and would be
+                 wrong here. This is closer to assimilation efficiency for a carnivore
+                 (real values are high, ~60-90%, since flesh is easy to digest),
+                 discounted for handling and waste.
+
+     escape      Prey speed matters. Without an escape mechanism, predation would
+                 make size a strictly dominant strategy and collapse the very trait
+                 diversity this feature exists to create. A faster prey escaping a
+                 slower predator is the mechanism that keeps speed valuable and keeps
+                 the arms race two-sided rather than a size runaway.
+
+   OFF by default, and enabled per-scenario via cfg.predation. This is deliberate:
+   turning it on globally would silently invalidate every M1-M4 measurement and the
+   tests that pin them. Existing scenarios stay exactly as measured; predation gets
+   its own scenario to be judged on. */
+const PREDATION = {
+  sizeRatio:  1.35,   // predator.size / prey.size needed to attempt (mass ratio ~2.5)
+  efficiency: 0.55,   // fraction of prey's energy captured (assimilation, not Lindeman)
+  reachMul:   3.6,    // strike range as a multiple of predator size
+  escapeMul:  0.80,   // how strongly a prey speed advantage converts to escape odds
+  cooldown:   12,     // ticks a predator must wait between kills; prevents one
+                      // large organism clearing a whole neighbourhood in a single tick
+
+  /* Optimal foraging theory: a predator should ignore prey whose energy return does
+     not justify the handling cost of pursuing it. Real predators do exactly this —
+     prey below a profitability threshold are simply not worth hunting.
+
+     Mechanically this creates a SIZE REFUGE at the small end, and it was added for a
+     specific measured reason. Predation without it drove the population unimodally
+     upward (mean size 0.62 -> ~2.0, histogram [0,0,0,0,9,85,25,3,0,0]) — everyone
+     converged on "be too big to be prey" and the predicted small-and-cheap strategy
+     was simply eliminated, because being small carried all of the risk and none of
+     the protection. A refuge gives small a reason to persist, which is the
+     precondition for a stable size polymorphism rather than a size ratchet. */
+  minPreySize: 0.62,  // prey below this are not worth hunting
+};
+
 /* ---------- Founding population ----------
    ONE ancestral population, not a set of predeclared species.
 
@@ -276,6 +340,13 @@ const SCENARIOS = [
      directly: same mean food, only the variance over time differs. */
   { id:'seasonal',  name:'Seasonal',   blurb:'Same average food as Temperate, but it swings between feast and lean. Tests whether a fluctuating environment favours a generalist a static one would not.',
     patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34, seasonal:true } },
+
+  /* Identical to Temperate except organisms can eat each other. Deliberately a
+     controlled twin: run it against Temperate and every difference is predation,
+     not food, geography, or season. Predation is OFF in every other scenario so
+     that all M1-M4 measurements remain valid. */
+  { id:'predation', name:'Predation',  blurb:'Same food as Temperate, but large organisms can eat smaller ones. Size finally buys something proportional to what it costs.',
+    patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34, predation:true } },
 ];
 
 /* ---------- Palette (darkfield microscopy) ----------
