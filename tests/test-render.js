@@ -33,16 +33,21 @@ check('census buffer populated', state.census.length > 5);
 check('ribbon histograms have one entry per trait',
       Object.keys(state.ribbon[0]).length === TRAITS.length);
 
-/* organismColor must produce a valid rgb() for every species, and an unknown tag
-   must not crash the draw path. */
+/* Clade colours must be valid for any index, including past the end of the palette
+   (a run can produce more species than we have colours for, and must wrap rather
+   than render undefined). */
 let badColor=false;
-for(const id of SPECIES.map(s=>s.id).concat(['__unknown__'])){
-  const o=makeOrganism(0,0,{speed:1,size:1,sense:30},1,id);
-  if(!/^rgb\(\d+,\d+,\d+\)$/.test(organismColor(o))) badColor=true;
+for(const k of [0,1,2,7,8,19]){
+  if(!/^#[0-9A-Fa-f]{6}$/.test(cladeColor(k))) badColor=true;
 }
-check('organismColor valid for all species and unknown tags', !badColor);
-check('distinct species render distinct colours',
-      new Set(SPECIES.map(s=>organismColor(makeOrganism(0,0,{speed:1,size:1,sense:30},1,s.id)))).size === SPECIES.length);
+check('cladeColor valid for any index incl. past palette end', !badColor);
+check('palette wraps rather than returning undefined',
+      cladeColor(0) === cladeColor(CLADE_COLORS.length));
+check('distinct clades within the palette get distinct colours',
+      new Set(CLADE_COLORS.map((_,k)=>cladeColor(k))).size === CLADE_COLORS.length);
+const o0 = makeOrganism(0,0,{speed:1,size:1,sense:30,diet:0.5},1);
+check('organismColor works on an organism with no clade assigned yet',
+      /^#[0-9A-Fa-f]{6}$/.test(organismColor(o0)));
 
 /* extinction must not break the draw path */
 state.organisms=[];

@@ -40,40 +40,30 @@ function buildTraitLegend(){
   }
 }
 
-function buildSpeciesList(){
+/* The species list is rebuilt every paint rather than once at boot: the number of
+   species is an outcome of the run, so rows must appear and disappear as clades split
+   and die. */
+function paintSpecies(){
   const host = $('speciesList');
-  if (!host) return;
-  host.innerHTML = '';
-  for (const id of state.activeSpecies){
-    const s = SPECIES_BY_ID[id];
-    const row = document.createElement('div');
-    row.className = 'sprow';
-    row.id = 'sp-' + id;
-    row.title = s.blurb;
-    row.innerHTML =
-      `<span class="dot" style="background:${s.color}"></span>` +
-      `<span class="spname">${s.name}<span class="spsub" id="sptr-${id}">\u2014</span></span>` +
-      `<span class="spcount" id="spn-${id}">\u2014</span>`;
-    host.appendChild(row);
+  if (!host || !state) return;
+  const clades = (state.clades || []).filter(c => c.n >= 5);
+  const nEl = $('statSpecies');
+  if (nEl) nEl.textContent = clades.length;
+
+  if (!clades.length){ host.innerHTML = '<div class="spsub">no viable species</div>'; return; }
+  let html = '';
+  for (const c of clades){
+    html += '<div class="sprow">' +
+      `<span class="dot" style="background:${cladeColor(c.id)}"></span>` +
+      `<span class="spname">Clade ${c.id + 1}` +
+        `<span class="spsub">spd ${c.traits.speed.toFixed(2)} \u00b7 sns ${c.traits.sense.toFixed(0)} \u00b7 diet ${c.traits.diet.toFixed(2)}</span>` +
+      '</span>' +
+      `<span class="spcount">${c.n}</span></div>`;
   }
+  host.innerHTML = html;
 }
 
-function paintSpecies(){
-  const counts = speciesCounts();
-  for (const id of state.activeSpecies){
-    const n = counts[id] || 0;
-    const cn = $('spn-' + id); if (cn) cn.textContent = n;
-    const row = $('sp-' + id); if (row) row.classList.toggle('out', n === 0);
-    const tr = $('sptr-' + id);
-    if (tr){
-      if (!n){ tr.textContent = 'excluded'; }
-      else {
-        const sp = speciesTraitStats(id,'speed').mean, se = speciesTraitStats(id,'sense').mean;
-        tr.textContent = `spd ${sp.toFixed(2)} \u00b7 sns ${se.toFixed(0)}`;
-      }
-    }
-  }
-}
+function buildSpeciesList(){ paintSpecies(); }
 
 function fmt(n, d){ return (n==null||!isFinite(n)) ? '—' : n.toFixed(d==null?2:d); }
 

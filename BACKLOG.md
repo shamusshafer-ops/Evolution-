@@ -7,10 +7,12 @@
 |3| Share a run (seed + scenario string) | Determinism makes this nearly free | S | Scoped in ROADMAP |
 |4| Niche partitioning: food types + heritable diet trait | The other half of Gause — proves coexistence, and gives species somewhere to diverge to | M | **Shipped 2026-07-29** |
 |16| Variable resource-type similarity | With types at 0/1 the tradeoff is maximal. A tunable separation would show generalists winning as types converge — the other half of the convex/concave result | S | Backlog |
-|17| Species differ on one axis only | Removes the diet-vs-foraging confound noted in ROADMAP; makes results attributable | S | Backlog |
-|13| Sexual reproduction + recombination | Currently asexual cloning with mutation; recombination changes drift dynamics substantially | L | Backlog |
-|14| Speciation via mating distance | Reproductive isolation by trait distance would let one population split into two | L | Backlog |
-|15| Environmental shift mid-run | Change scenario while running to watch a population adapt or crash | S | Backlog |
+|17| ~~Species differ on one axis only~~ | Obsolete — hardcoded species removed entirely in M3, so the confound no longer exists | — | **Closed 2026-07-30** |
+|13| Sexual reproduction + recombination | Prerequisite for speciation — no gene flow to interrupt without it | L | **Shipped 2026-07-30** |
+|14| Emergent speciation via mating distance | Species derived as connected components of the interbreeding graph, not declared | L | **Shipped 2026-07-30** |
+|15| Environmental dynamics: seasons, shocks, migration between patches | Static scenarios cannot show fluctuating selection, a major real driver of maintained diversity. Ranked #2 by owner | M | Next up |
+|18| Clade colour/identity stability | Colours are size-ranked so they flicker when ranks swap; needs lineage tracking (#2) to fix properly | S | Backlog |
+|19| Artificial-selection mode | Player becomes the selective pressure; the Darwin-and-pigeon-breeders contrast. Ranked #4 by owner | M | Backlog |
 |7| Trait correlation view (scatter) | Are fast organisms also small? The ribbon cannot show joint distributions | M | Backlog |
 |8| Export run history as CSV | For anyone wanting to analyse outside the tool | S | Backlog |
 |9| Pinch-zoom / pan the specimen well | At 1400 organisms individuals are hard to follow | M | Backlog |

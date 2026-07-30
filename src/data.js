@@ -87,6 +87,30 @@ const TRAITS = [
 ];
 const TRAIT_KEYS = TRAITS.map(t => t.key);
 
+/* ---------- Mating ----------
+   maxTraitDistance is the isolation knob and the whole basis of emergent speciation.
+   Infinity = one panmictic gene pool (no isolation, no species). Lowered, lineages
+   that drift apart in trait space stop exchanging genes and become separate species
+   on their own — divergence CAUSING isolation, which is the real sequence, rather
+   than isolation assumed up front by hardcoding species.
+
+   Tuned empirically: too high and nothing ever splits, too low and every organism is
+   its own species and the population cannot breed at all. See ROADMAP for the sweep.
+
+   radius is spatial, not genetic: an organism must physically find a partner. That
+   makes local density a fitness factor and is why sex is costly beyond the twofold
+   cost — a well-fed loner in empty space leaves no descendants. */
+const MATE = {
+  radius: 26,               // world units within which a partner can be found
+  maturity: 40,             // ticks before an organism can breed at all
+  /* Tuned by sweep (see ROADMAP). The transition is sharp and sits between 0.30 and
+     0.20: at 0.30 the population shows two diet morphs but remains ONE interbreeding
+     species; at 0.20 and below the components actually sever and two species emerge.
+     0.12 sits comfortably inside the speciating regime without starving mating —
+     below ~0.04 organisms cannot find compatible partners and the population thins. */
+  maxTraitDistance: 0.12,
+};
+
 /* ---------- Life cycle ---------- */
 const LIFE = {
   startEnergy:   140,      // scaled by mass at birth
@@ -98,31 +122,33 @@ const LIFE = {
   maxPop:        1400,     // hard ceiling — protects framerate on phones
 };
 
-/* ---------- Species ----------
-   Separate, non-interbreeding lineages competing for the same food. Reproduction is
-   asexual, so a child simply inherits its parent's species id — no hybridisation.
+/* ---------- Founding population ----------
+   ONE ancestral population, not a set of predeclared species.
 
-   Each species differs only in where it STARTS in trait space, not in the rules it
-   plays by. That is deliberate: if species had different rules, any outcome would be
-   something we built rather than something that emerged. Identical rules plus
-   different starting points is the setup for Gause's competitive exclusion principle
-   — two species on one limiting resource cannot coexist indefinitely; the one with
-   even a slight edge compounds it until the other is gone. Watching that happen is
-   the point. See ROADMAP #4 for the niche-partitioning slice that lets them coexist. */
-const SPECIES = [
-  { id:'sprinter', name:'Sprinter', color:'#E0607E', short:'SPR',
-    init:{ speed:2.60, size:0.85, sense:16.0, diet:0.15 },
-    blurb:'Fast, small, near-sighted, starts on the amber resource. Wins on open ground.' },
-  { id:'watcher',  name:'Watcher',  color:'#4EA8DE', short:'WAT',
-    init:{ speed:1.10, size:0.90, sense:44.0, diet:0.85 },
-    blurb:'Slow, wide-sighted, starts on the violet resource. Wins where food is concentrated.' },
-  { id:'forager',  name:'Forager',  color:'#E8B04B', short:'FOR',
-    init:{ speed:1.70, size:1.30, sense:26.0, diet:0.50 },
-    blurb:'A dietary generalist between the two. Mediocre on both resources by design.' },
+   Earlier builds hardcoded three species (Sprinter / Watcher / Forager) as fixed
+   starting points with a label inherited on reproduction. That was dishonest in a
+   specific way: it assumed the answer. Species were an input, so the sim could never
+   show speciation happening — and worse, once sexual reproduction landed, the labels
+   stopped tracking reality entirely (a Sprinter x Watcher child simply inherited its
+   first parent's tag while its genes came from both).
+
+   Now there is one founding gene pool and species are DERIVED — see computeSpecies()
+   in sim.js, which finds connected components of the interbreeding graph. Whether the
+   run ends with one species, two, or five is an outcome, not a setting.
+
+   Clade colours are assigned by size rank at render time, since the number of species
+   is not known ahead of time. */
+const FOUNDER = {
+  name: 'Ancestral stock',
+  spread: 3.0,   // multiples of each trait's sigma, as founding standard deviation
+};
+
+/* Palette for emergent clades, largest-first. Deliberately more entries than a run is
+   likely to need; runs that exceed it wrap and are reported as such. */
+const CLADE_COLORS = [
+  '#4EA8DE', '#E0607E', '#E8B04B', '#6FD3A2',
+  '#B48EE0', '#E8734B', '#5FD0D8', '#C2A45E',
 ];
-const SPECIES_BY_ID = {};
-for (const s of SPECIES) SPECIES_BY_ID[s.id] = s;
-
 
 /* ---------- Scenarios ----------
    Each applies a different selection pressure so the same starting population

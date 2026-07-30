@@ -5,55 +5,61 @@
 
 ## Status
 
-**M1 shipped (2026-07-29).** Seeded deterministic sim, 3 traits under real allometric
+**M1 shipped (2026-07-29).** Seeded deterministic sim, traits under real allometric
 cost, 5 scenarios, specimen-well render, trait-drift ribbon.
 
-**M2 slice A shipped (2026-07-29).** Three competing species on one shared resource,
-census strip, per-species readouts.
+**M2 shipped (2026-07-29).** Typed resources, heritable `diet`, convex dietary
+tradeoff, Monoculture control scenario, census strip.
 
-**M2 slice B shipped (2026-07-29).** Two typed resources, heritable `diet` trait,
-convex dietary tradeoff, Monoculture control scenario. 68 tests.
+**M3 shipped (2026-07-30).** Sexual reproduction with free recombination; hardcoded
+species REPLACED by emergent speciation. 74 tests.
 
-### Measured: coexistence via niche partitioning
+### M3: what changed and why
 
-Monoculture and Oasis are identical scenarios except for the number of resource types,
-which makes this a controlled comparison. 20,000 ticks, 3 seeds each:
+Hardcoded species were dishonest in a specific way — they assumed the answer, so the sim
+could never show speciation happening. Worse, once sexual reproduction landed the labels
+stopped tracking reality: a cross between two "species" simply inherited its first
+parent's tag while its genes came from both.
 
-| | Sprinter | Watcher | Forager | Survivors |
-|---|---|---|---|---|
-| Monoculture (one resource) | 606-793 | 0 | 0 | **1 — exclusion** |
-| Oasis (two resources) | 259-330 | 211-396 | 0 | **2 — coexistence** |
+Species are now DERIVED as connected components of the interbreeding graph. Reproduction
+is sexual with per-trait random parent choice (NOT blending — blending halves variance
+per generation and would erase the variation selection acts on).
 
-They do not merely both survive, they PARTITION: Sprinter's diet converges to 0.03 and
-Watcher's to 0.97 in every seed. That also cures slice A's convergence problem — diet
-gives species somewhere to diverge to, so identity stops decaying into a lineage tag.
+### Measured: polymorphism is not speciation
 
-The dietary generalist (Forager) is excluded in both cases, which is the convex tradeoff
-working as designed: at diet 0.5 it earns 0.218 from each resource (0.435 combined)
-against a specialist's 1.040.
+The important finding, and one the old model structurally could not express. Under the
+convex dietary tradeoff the population goes bimodal even with free mating, because
+disruptive selection kills intermediates:
 
-### Measured: competitive exclusion works
+| Isolation | Diet modes | Viable species |
+|---|---|---|
+| Infinity | 2 | **1** |
+| 0.30 | 2 | **1** |
+| 0.20 | 2 | 2 |
+| 0.14 | 2 | 2 |
+| 0.12 (default) | 2 | 2 |
+| 0.035 | 2 | 1.5 (mating starts failing) |
 
-Species differ only in where they start in trait space — identical rules, identical
-costs. The environment picks the winner, unanimously across 3 seeds:
+The transition sits sharply between 0.30 and 0.20. Same bimodality throughout; only
+below the transition is gene flow actually severed.
 
-| Scenario | Sprinter | Watcher | Forager |
-|---|---|---|---|
-| Open plains (scattered food) | 1107-1278 | **0 — excluded** | 0-6 |
-| Oasis (concentrated food) | 65-190 | **565-600** | 55-123 |
+### Measured: speciation is stochastic
 
-Over 32k ticks the oasis excludes too, just slowly (Sprinter 235 -> 15).
+From one founding population, 5 seeds, oasis: speciation occurred in **5/5**, median wait
+**~17,000 ticks** (range 10,000-17,500). One seed's split COLLAPSED — 2 species at 10k,
+back to 1 by 40k. Tests therefore assert that speciation occurs, not the species count at
+a fixed endpoint, which would be a coin flip on timing.
 
-### Measured: species converge, which is the problem slice B solves
+Population fell ~970 -> ~400 with sex: the twofold cost, correct but a real change.
 
-Because species differ only in starting point and evolve freely, they drift toward the
-same environmental optimum. In oasis over 32k ticks Sprinter's sense went 16 -> 45.6
-while Watcher's went 44 -> 23 — they crossed over. Species identity decays into a
-lineage tag, so exclusion ends up decided by head start rather than by a stable
-strategic difference. Watcher also evolved speed 1.10 -> 0.28: it stopped moving and
-camped a rich patch. Nobody coded that.
+## Open decision — clade colour stability
 
-This is exactly why niche partitioning matters — see #4.
+Clade colours are assigned by size rank, so a lineage's colour can change between samples
+when ranks swap. Stable colours would require stable identity, which is the thing this
+model deliberately refuses to assume. Expect flicker when two clades are close in size.
+Alternatives: colour by position in trait space (stable, but two distant clades could
+collide), or track lineage ancestry to give each clade a persistent id (correct, more
+work — see #2).
 
 ## Known limitation — size is below the noise floor
 

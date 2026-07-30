@@ -88,6 +88,30 @@ const TRAITS = [
 ];
 const TRAIT_KEYS = TRAITS.map(t => t.key);
 
+/* ---------- Mating ----------
+   maxTraitDistance is the isolation knob and the whole basis of emergent speciation.
+   Infinity = one panmictic gene pool (no isolation, no species). Lowered, lineages
+   that drift apart in trait space stop exchanging genes and become separate species
+   on their own — divergence CAUSING isolation, which is the real sequence, rather
+   than isolation assumed up front by hardcoding species.
+
+   Tuned empirically: too high and nothing ever splits, too low and every organism is
+   its own species and the population cannot breed at all. See ROADMAP for the sweep.
+
+   radius is spatial, not genetic: an organism must physically find a partner. That
+   makes local density a fitness factor and is why sex is costly beyond the twofold
+   cost — a well-fed loner in empty space leaves no descendants. */
+const MATE = {
+  radius: 26,               // world units within which a partner can be found
+  maturity: 40,             // ticks before an organism can breed at all
+  /* Tuned by sweep (see ROADMAP). The transition is sharp and sits between 0.30 and
+     0.20: at 0.30 the population shows two diet morphs but remains ONE interbreeding
+     species; at 0.20 and below the components actually sever and two species emerge.
+     0.12 sits comfortably inside the speciating regime without starving mating —
+     below ~0.04 organisms cannot find compatible partners and the population thins. */
+  maxTraitDistance: 0.12,
+};
+
 /* ---------- Life cycle ---------- */
 const LIFE = {
   startEnergy:   140,      // scaled by mass at birth
@@ -99,31 +123,33 @@ const LIFE = {
   maxPop:        1400,     // hard ceiling — protects framerate on phones
 };
 
-/* ---------- Species ----------
-   Separate, non-interbreeding lineages competing for the same food. Reproduction is
-   asexual, so a child simply inherits its parent's species id — no hybridisation.
+/* ---------- Founding population ----------
+   ONE ancestral population, not a set of predeclared species.
 
-   Each species differs only in where it STARTS in trait space, not in the rules it
-   plays by. That is deliberate: if species had different rules, any outcome would be
-   something we built rather than something that emerged. Identical rules plus
-   different starting points is the setup for Gause's competitive exclusion principle
-   — two species on one limiting resource cannot coexist indefinitely; the one with
-   even a slight edge compounds it until the other is gone. Watching that happen is
-   the point. See ROADMAP #4 for the niche-partitioning slice that lets them coexist. */
-const SPECIES = [
-  { id:'sprinter', name:'Sprinter', color:'#E0607E', short:'SPR',
-    init:{ speed:2.60, size:0.85, sense:16.0, diet:0.15 },
-    blurb:'Fast, small, near-sighted, starts on the amber resource. Wins on open ground.' },
-  { id:'watcher',  name:'Watcher',  color:'#4EA8DE', short:'WAT',
-    init:{ speed:1.10, size:0.90, sense:44.0, diet:0.85 },
-    blurb:'Slow, wide-sighted, starts on the violet resource. Wins where food is concentrated.' },
-  { id:'forager',  name:'Forager',  color:'#E8B04B', short:'FOR',
-    init:{ speed:1.70, size:1.30, sense:26.0, diet:0.50 },
-    blurb:'A dietary generalist between the two. Mediocre on both resources by design.' },
+   Earlier builds hardcoded three species (Sprinter / Watcher / Forager) as fixed
+   starting points with a label inherited on reproduction. That was dishonest in a
+   specific way: it assumed the answer. Species were an input, so the sim could never
+   show speciation happening — and worse, once sexual reproduction landed, the labels
+   stopped tracking reality entirely (a Sprinter x Watcher child simply inherited its
+   first parent's tag while its genes came from both).
+
+   Now there is one founding gene pool and species are DERIVED — see computeSpecies()
+   in sim.js, which finds connected components of the interbreeding graph. Whether the
+   run ends with one species, two, or five is an outcome, not a setting.
+
+   Clade colours are assigned by size rank at render time, since the number of species
+   is not known ahead of time. */
+const FOUNDER = {
+  name: 'Ancestral stock',
+  spread: 3.0,   // multiples of each trait's sigma, as founding standard deviation
+};
+
+/* Palette for emergent clades, largest-first. Deliberately more entries than a run is
+   likely to need; runs that exceed it wrap and are reported as such. */
+const CLADE_COLORS = [
+  '#4EA8DE', '#E0607E', '#E8B04B', '#6FD3A2',
+  '#B48EE0', '#E8734B', '#5FD0D8', '#C2A45E',
 ];
-const SPECIES_BY_ID = {};
-for (const s of SPECIES) SPECIES_BY_ID[s.id] = s;
-
 
 /* ---------- Scenarios ----------
    Each applies a different selection pressure so the same starting population
@@ -233,12 +259,12 @@ function makeState(opts){
     organisms: [],
     food: [],
     sites: [],
-    activeSpecies: opts.species || SPECIES.map(s=>s.id),
-    census: [],           // per-sample population by species — where exclusion becomes visible
+    census: [],           // per-sample population by clade — where exclusion becomes visible
+    clades: [],           // emergent species, recomputed in sampleHistory()
     foodCarry: 0,
     running: false,
     speedMult: 1,
-    stats: { born:0, starved:0, aged:0, eaten:0, peakPop:0 },
+    stats: { born:0, starved:0, aged:0, eaten:0, peakPop:0, unmated:0 },
     history: [],          // per-sample trait means
     ribbon: [],           // per-sample trait HISTOGRAMS, for the drift ribbon
     sampleEvery: 30,
@@ -270,10 +296,10 @@ function dietEfficiency(o, type){
   return Math.max(DIET.floor, eff);
 }
 
-function makeOrganism(x, y, traits, gen, sp){
+function makeOrganism(x, y, traits, gen){
   const o = {
     id: state.nextId++,
-    sp: sp || 'sprinter',
+    clade: 0,
     x, y,
     dir: rnd() * Math.PI * 2,
     gen: gen || 1,
@@ -338,23 +364,16 @@ function initWorld(opts){
   seedSites();
   spawnFood(state.cfg.foodStart);
 
-  // Found each species with an EQUAL share of the starting population, so any later
-  // difference in abundance is competition rather than a head start we handed out.
-  const active = state.activeSpecies;
-  const per = Math.max(1, Math.floor(LIFE.startPop / active.length));
-  for (const spId of active){
-    const spec = SPECIES_BY_ID[spId];
-    for (let i = 0; i < per; i++){
-      const traits = {};
-      // Seed with variance. A monomorphic start has nothing for selection to act on
-      // until mutation supplies it, which wastes generations.
-      for (const t of TRAITS){
-        const base = (spec && spec.init && spec.init[t.key] != null) ? spec.init[t.key] : t.init;
-        traits[t.key] = clamp(base + rndNorm()*t.sigma*3, t.min, t.max);
-      }
-      state.organisms.push(makeOrganism(rnd()*state.cfg.w, rnd()*state.cfg.h, traits, 1, spId));
-    }
+  // One ancestral gene pool. Founding variance matters: a monomorphic start gives
+  // selection nothing to act on until mutation supplies it, wasting generations, and
+  // gives assortative mating nothing to separate.
+  for (let i = 0; i < LIFE.startPop; i++){
+    const traits = {};
+    for (const t of TRAITS) traits[t.key] = clamp(t.init + rndNorm()*t.sigma*FOUNDER.spread, t.min, t.max);
+    state.organisms.push(makeOrganism(rnd()*state.cfg.w, rnd()*state.cfg.h, traits, 1));
   }
+  computeSpecies();
+
   sampleHistory();
   return state;
 }
@@ -421,21 +440,53 @@ function findFood(o, fg){
   return best;
 }
 
-function reproduce(o){
+/* ---------- Reproduction ----------
+   Sexual, with free recombination. This replaced asexual budding because emergent
+   speciation is meaningless without it: reproductive isolation can only isolate
+   something if there is gene flow to interrupt, and every asexual clone line is
+   already independent by construction. The biological species concept — an
+   interbreeding population — is undefined without sex.
+
+   Recombination is PER-TRAIT RANDOM PARENT CHOICE, not the midpoint of the two.
+   Blending inheritance halves the population's variance every generation, which was
+   Darwin's actual unsolved problem and what Mendelian particulate inheritance fixed.
+   A sim that averaged its parents would quietly erase the variation selection needs
+   to act on, and the trait ribbon would converge to a flat line for reasons that had
+   nothing to do with selection. Treating each trait as an unlinked locus preserves
+   variance and is the honest minimum model. */
+function traitDistance(a, b){
+  // Normalised Euclidean distance in trait space, so traits on wildly different
+  // scales (sense spans 4..150, diet spans 0..1) contribute comparably.
+  let acc = 0;
+  for (const t of TRAITS){
+    const span = t.max - t.min;
+    const d = (a[t.key] - b[t.key]) / span;
+    acc += d * d;
+  }
+  return Math.sqrt(acc / TRAITS.length);
+}
+
+function reproduceSexual(a, b){
   const childTraits = {};
   for (const t of TRAITS){
-    let v = o[t.key];
+    let v = (rnd() < 0.5) ? a[t.key] : b[t.key];      // unlinked locus, one parent's allele
     if (rnd() < LIFE.mutateChance) v += rndNorm() * t.sigma;
     childTraits[t.key] = clamp(v, t.min, t.max);
   }
-  const give = o.energy * LIFE.reproduceCost;
-  o.energy -= give;
-  const child = makeOrganism(o.x, o.y, childTraits, o.gen + 1, o.sp); // asexual: species is inherited, never hybridised
-  child.energy = give;
+  // Both parents pay. This is the twofold cost of sex made literal: two adults are
+  // consumed to make one offspring where budding made one from one, which is why the
+  // energy economy needed retuning when this landed.
+  const giveA = a.energy * LIFE.reproduceCost;
+  const giveB = b.energy * LIFE.reproduceCost;
+  a.energy -= giveA;
+  b.energy -= giveB;
+  const child = makeOrganism(a.x, a.y, childTraits, Math.max(a.gen, b.gen) + 1);
+  child.energy = giveA + giveB;
   child.dir = rnd() * Math.PI * 2;
   state.organisms.push(child);
   state.stats.born++;
   if (child.gen > state.generation) state.generation = child.gen;
+  return child;
 }
 
 function step(){
@@ -500,11 +551,7 @@ function step(){
   state.organisms = survivors;
 
   // Reproduce after the survival pass so a newborn cannot act on the tick it is born.
-  const n = state.organisms.length;
-  for (let i = 0; i < n; i++){
-    const o = state.organisms[i];
-    if (o.energy >= LIFE.reproduceAt && state.organisms.length < LIFE.maxPop) reproduce(o);
-  }
+  matingPass();
 
   if (eatenFood.size){
     const keep = [];
@@ -544,33 +591,166 @@ function traitHistogram(key, bins){
   return out;
 }
 
-/* ---------- Per-species statistics ---------- */
-function speciesCounts(){
-  const out = {};
-  for (const id of state.activeSpecies) out[id] = 0;
-  for (const o of state.organisms) if (out[o.sp] != null) out[o.sp]++;
+/* ---------- Mating ----------
+   Only organisms above the reproduction threshold participate, so mate-finding is
+   indexed over that subset rather than the whole population — at 1400 organisms a
+   naive pairwise search would be ~1M comparisons per tick and would not hold 60fps.
+
+   Finding a partner is itself a fitness cost, and a real one: a well-fed organism
+   alone in empty space cannot breed. That makes local density matter, which is why
+   clumped resources now affect reproduction and not just feeding.
+
+   MATE.maxTraitDistance is the hook slice B turns into speciation. At Infinity every
+   ready pair can breed and the population is one panmictic gene pool; lowered, gene
+   flow between distant lineages stops and species emerge on their own. */
+function matingPass(){
+  const cfg = state.cfg;
+  const ready = [];
+  for (const o of state.organisms){
+    if (o.energy >= LIFE.reproduceAt && o.age >= MATE.maturity) ready.push(o);
+  }
+  if (ready.length < 2) return;
+
+  const cell = Math.max(8, MATE.radius);
+  const cols = Math.max(1, Math.ceil(cfg.w / cell));
+  const rows = Math.max(1, Math.ceil(cfg.h / cell));
+  const grid = new Map();
+  for (let i = 0; i < ready.length; i++){
+    const o = ready[i];
+    const k = (clamp(Math.floor(o.y/cell),0,rows-1)) * cols + (clamp(Math.floor(o.x/cell),0,cols-1));
+    let b = grid.get(k); if (!b){ b = []; grid.set(k, b); }
+    b.push(i);
+  }
+
+  const paired = new Uint8Array(ready.length);
+  const r2 = MATE.radius * MATE.radius;
+
+  for (let i = 0; i < ready.length; i++){
+    if (paired[i]) continue;
+    if (state.organisms.length >= LIFE.maxPop) break;
+    const a = ready[i];
+    const cx = clamp(Math.floor(a.x/cell),0,cols-1);
+    const cy = clamp(Math.floor(a.y/cell),0,rows-1);
+
+    let mate = -1, bestD = Infinity;
+    for (let gy = cy-1; gy <= cy+1 && mate < 0; gy++){
+      for (let gx = cx-1; gx <= cx+1; gx++){
+        let ax = gx, ay = gy;
+        if (cfg.wrap){ ax = ((gx%cols)+cols)%cols; ay = ((gy%rows)+rows)%rows; }
+        else if (gx<0||gy<0||gx>=cols||gy>=rows) continue;
+        const bucket = grid.get(ay*cols + ax);
+        if (!bucket) continue;
+        for (const j of bucket){
+          if (j === i || paired[j]) continue;
+          const b = ready[j];
+          const dx = wrapDelta(b.x - a.x, cfg.w), dy = wrapDelta(b.y - a.y, cfg.h);
+          const d2 = dx*dx + dy*dy;
+          if (d2 > r2) continue;
+          // Assortative mating: too far apart in trait space and they cannot breed.
+          // This single line is what lets species arise instead of being declared.
+          if (traitDistance(a, b) > MATE.maxTraitDistance) continue;
+          if (d2 < bestD){ bestD = d2; mate = j; }
+        }
+      }
+    }
+    if (mate >= 0){
+      paired[i] = 1; paired[mate] = 1;
+      reproduceSexual(a, ready[mate]);
+    } else {
+      state.stats.unmated++;
+    }
+  }
+}
+
+/* ---------- Emergent species ----------
+   A species is not declared here, it is MEASURED. Following the biological species
+   concept directly: two organisms are conspecific if they could interbreed, so a
+   species is a connected component of the interbreeding graph.
+
+   This matters because bimodality is not speciation. Under a convex dietary tradeoff
+   the population splits into two diet clusters even with completely free mating —
+   disruptive selection kills the intermediates. But those clusters still exchange
+   genes at every other locus, so they are one species with a polymorphism, not two
+   species. Only when MATE.maxTraitDistance is tight enough to sever gene flow do the
+   components actually separate. Counting components distinguishes the two cases;
+   counting modes in a histogram does not.
+
+   Union-find over the whole population, recomputed periodically rather than per tick
+   (it is O(n^2) in the worst case, ~125k comparisons at n=500).
+
+   Known and deliberate: components CHAIN. If A can breed with B and B with C but A
+   not with C, all three land in one component. That is the ring-species problem, and
+   it is real biology rather than a bug — species boundaries genuinely are fuzzy under
+   the interbreeding definition. */
+function computeSpecies(){
+  const pop = state.organisms;
+  const n = pop.length;
+  const parent = new Int32Array(n);
+  for (let i = 0; i < n; i++) parent[i] = i;
+  function find(i){ while (parent[i] !== i){ parent[i] = parent[parent[i]]; i = parent[i]; } return i; }
+  function union(i, j){ const a = find(i), b = find(j); if (a !== b) parent[a] = b; }
+
+  const thr = MATE.maxTraitDistance;
+  if (isFinite(thr)){
+    for (let i = 0; i < n; i++){
+      for (let j = i+1; j < n; j++){
+        if (find(i) === find(j)) continue;
+        if (traitDistance(pop[i], pop[j]) <= thr) union(i, j);
+      }
+    }
+  }
+  // else: every pair can interbreed, so the whole population is one component.
+
+  const groups = new Map();
+  for (let i = 0; i < n; i++){
+    const r = isFinite(thr) ? find(i) : 0;
+    let g = groups.get(r); if (!g){ g = []; groups.set(r, g); }
+    g.push(i);
+  }
+  // Order largest-first and drop singleton noise into their own entries anyway —
+  // a lone unmatable organism IS a (doomed) species under this definition.
+  const clusters = [...groups.values()].sort((a,b) => b.length - a.length);
+  const out = clusters.map((idx, k) => {
+    const members = idx.map(i => pop[i]);
+    const c = { id:k, n:members.length, traits:{} };
+    for (const t of TRAITS){
+      let s = 0; for (const m of members) s += m[t.key];
+      c.traits[t.key] = s / members.length;
+    }
+    return c;
+  });
+  for (let k = 0; k < clusters.length; k++) for (const i of clusters[k]) pop[i].clade = k;
+  state.clades = out;
   return out;
 }
-function speciesTraitStats(spId, key){
+
+/* Species count that ignores unviable singletons: a component of one cannot breed and
+   will vanish, so counting it inflates the species tally. Reported alongside the raw
+   count rather than instead of it. */
+function viableSpeciesCount(minSize){
+  minSize = minSize || 5;
+  return (state.clades || []).filter(c => c.n >= minSize).length;
+}
+
+/* ---------- Per-clade statistics ----------
+   Keyed on the DERIVED clade index, so these are only meaningful after
+   computeSpecies() has run for the current population. */
+function cladeCounts(){
+  const out = {};
+  for (const c of (state.clades||[])) out[c.id] = c.n;
+  return out;
+}
+function cladeTraitStats(cid, key){
   let sum=0, n=0, min=Infinity, max=-Infinity;
   for (const o of state.organisms){
-    if (o.sp !== spId) continue;
-    const v = o[key]; sum += v; n++;
-    if (v<min) min=v; if (v>max) max=v;
+    if (o.clade !== cid) continue;
+    const v=o[key]; sum+=v; n++; if(v<min)min=v; if(v>max)max=v;
   }
-  if (!n) return { mean:0, sd:0, min:0, max:0, n:0 };
-  const mean = sum/n;
-  let ss=0;
-  for (const o of state.organisms){ if (o.sp!==spId) continue; const d=o[key]-mean; ss+=d*d; }
+  if(!n) return { mean:0, sd:0, min:0, max:0, n:0 };
+  const mean=sum/n; let ss=0;
+  for (const o of state.organisms){ if(o.clade!==cid) continue; const d=o[key]-mean; ss+=d*d; }
   return { mean, sd:Math.sqrt(ss/n), min, max, n };
 }
-/* A species is extinct when nothing carries its tag. Tracked separately from the
-   live count so the census can keep drawing the moment of exclusion after the fact. */
-function speciesExtinct(spId){
-  for (const o of state.organisms) if (o.sp === spId) return false;
-  return true;
-}
-function survivingSpecies(){ return state.activeSpecies.filter(id => !speciesExtinct(id)); }
 
 function sampleHistory(){
   const row = { tick: state.tick, pop: state.organisms.length, food: state.food.length, gen: state.generation };
@@ -588,8 +768,8 @@ function sampleHistory(){
 
   // Species census. Stored as absolute counts rather than shares so the strip can
   // show a population collapsing outright versus merely losing ground.
-  const cen = { tick: state.tick, counts: speciesCounts() };
-  for (const id of state.activeSpecies) cen[id + ':speed'] = speciesTraitStats(id,'speed').mean;
+  computeSpecies();   // emergent species are derived, so they must be recomputed, not stored
+  const cen = { tick: state.tick, clades: (state.clades||[]).map(c=>c.n), nClades: viableSpeciesCount() };
   state.census.push(cen);
   if (state.census.length > 260) state.census.shift();
 }
@@ -632,23 +812,16 @@ function fitCanvases(){
   _view.oy = (_well.height - cfg.h * s) / 2;
 }
 
-/* An organism's hue is its SPECIES; brightness carries how well-fed it is. Trait
-   values are read from the ribbon rather than the hue, because once species compete
-   the question you are asking of the well is "who is winning where", not "what is
-   this individual's speed". Mixing traits into hue as well made the two species
-   indistinguishable exactly when the competition got interesting. */
+/* An organism's hue is its emergent CLADE, assigned by size rank. Because species are
+   derived rather than declared, the colour of a given lineage can change between
+   samples if the size ordering changes — accepted deliberately: a stable colour would
+   require stable identity, which is exactly the thing this model refuses to assume. */
 function hexToRgb(h){
   const n = parseInt(h.slice(1), 16);
   return [(n>>16)&255, (n>>8)&255, n&255];
 }
-const _spRgb = {};
-function organismColor(o){
-  const spec = SPECIES_BY_ID[o.sp];
-  const hex = spec ? spec.color : '#D7E3E3';
-  if (!_spRgb[hex]) _spRgb[hex] = hexToRgb(hex);
-  const [r,g,b] = _spRgb[hex];
-  return `rgb(${r},${g},${b})`;
-}
+function cladeColor(k){ return CLADE_COLORS[k % CLADE_COLORS.length]; }
+function organismColor(o){ return cladeColor(o.clade || 0); }
 
 function drawWell(){
   if (!_wellCtx || !state) return;
@@ -788,7 +961,7 @@ function drawCensus(){
   let peak = 1;
   for (const s of hist){
     let tot = 0;
-    for (const id of state.activeSpecies) tot += (s.counts[id]||0);
+    for (const v of (s.clades||[])) tot += v;
     if (tot > peak) peak = tot;
   }
 
@@ -796,12 +969,13 @@ function drawCensus(){
   for (let i = 0; i < hist.length; i++){
     const s = hist[i];
     let acc = 0;
-    for (const id of state.activeSpecies){
-      const v = s.counts[id] || 0;
+    const sizes = s.clades || [];
+    for (let id = 0; id < sizes.length; id++){
+      const v = sizes[id];
       if (v <= 0){ continue; }
       const h0 = (acc / peak) * H;
       const h1 = ((acc + v) / peak) * H;
-      ctx.fillStyle = (SPECIES_BY_ID[id] && SPECIES_BY_ID[id].color) || PAL.chalk;
+      ctx.fillStyle = cladeColor(Number(id));
       ctx.fillRect(i*cw, H - h1, Math.max(1, cw + 0.6), Math.max(1, h1 - h0));
       acc += v;
     }
@@ -811,7 +985,7 @@ function drawCensus(){
   ctx.font = `600 ${Math.round(9.5*dpr)}px ui-monospace, Menlo, monospace`;
   ctx.textBaseline = 'top';
   ctx.fillStyle = PAL.chalkDim;
-  ctx.fillText('CENSUS', 6, 4);
+  ctx.fillText('CENSUS \u00b7 ' + ((hist[hist.length-1]||{}).nClades || 0) + ' SPECIES', 6, 4);
   ctx.textAlign = 'right';
   ctx.fillText('peak ' + peak, W - 6, 4);
   ctx.textAlign = 'left';
@@ -866,40 +1040,30 @@ function buildTraitLegend(){
   }
 }
 
-function buildSpeciesList(){
+/* The species list is rebuilt every paint rather than once at boot: the number of
+   species is an outcome of the run, so rows must appear and disappear as clades split
+   and die. */
+function paintSpecies(){
   const host = $('speciesList');
-  if (!host) return;
-  host.innerHTML = '';
-  for (const id of state.activeSpecies){
-    const s = SPECIES_BY_ID[id];
-    const row = document.createElement('div');
-    row.className = 'sprow';
-    row.id = 'sp-' + id;
-    row.title = s.blurb;
-    row.innerHTML =
-      `<span class="dot" style="background:${s.color}"></span>` +
-      `<span class="spname">${s.name}<span class="spsub" id="sptr-${id}">\u2014</span></span>` +
-      `<span class="spcount" id="spn-${id}">\u2014</span>`;
-    host.appendChild(row);
+  if (!host || !state) return;
+  const clades = (state.clades || []).filter(c => c.n >= 5);
+  const nEl = $('statSpecies');
+  if (nEl) nEl.textContent = clades.length;
+
+  if (!clades.length){ host.innerHTML = '<div class="spsub">no viable species</div>'; return; }
+  let html = '';
+  for (const c of clades){
+    html += '<div class="sprow">' +
+      `<span class="dot" style="background:${cladeColor(c.id)}"></span>` +
+      `<span class="spname">Clade ${c.id + 1}` +
+        `<span class="spsub">spd ${c.traits.speed.toFixed(2)} \u00b7 sns ${c.traits.sense.toFixed(0)} \u00b7 diet ${c.traits.diet.toFixed(2)}</span>` +
+      '</span>' +
+      `<span class="spcount">${c.n}</span></div>`;
   }
+  host.innerHTML = html;
 }
 
-function paintSpecies(){
-  const counts = speciesCounts();
-  for (const id of state.activeSpecies){
-    const n = counts[id] || 0;
-    const cn = $('spn-' + id); if (cn) cn.textContent = n;
-    const row = $('sp-' + id); if (row) row.classList.toggle('out', n === 0);
-    const tr = $('sptr-' + id);
-    if (tr){
-      if (!n){ tr.textContent = 'excluded'; }
-      else {
-        const sp = speciesTraitStats(id,'speed').mean, se = speciesTraitStats(id,'sense').mean;
-        tr.textContent = `spd ${sp.toFixed(2)} \u00b7 sns ${se.toFixed(0)}`;
-      }
-    }
-  }
-}
+function buildSpeciesList(){ paintSpecies(); }
 
 function fmt(n, d){ return (n==null||!isFinite(n)) ? '—' : n.toFixed(d==null?2:d); }
 

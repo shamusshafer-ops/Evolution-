@@ -32,23 +32,16 @@ function fitCanvases(){
   _view.oy = (_well.height - cfg.h * s) / 2;
 }
 
-/* An organism's hue is its SPECIES; brightness carries how well-fed it is. Trait
-   values are read from the ribbon rather than the hue, because once species compete
-   the question you are asking of the well is "who is winning where", not "what is
-   this individual's speed". Mixing traits into hue as well made the two species
-   indistinguishable exactly when the competition got interesting. */
+/* An organism's hue is its emergent CLADE, assigned by size rank. Because species are
+   derived rather than declared, the colour of a given lineage can change between
+   samples if the size ordering changes — accepted deliberately: a stable colour would
+   require stable identity, which is exactly the thing this model refuses to assume. */
 function hexToRgb(h){
   const n = parseInt(h.slice(1), 16);
   return [(n>>16)&255, (n>>8)&255, n&255];
 }
-const _spRgb = {};
-function organismColor(o){
-  const spec = SPECIES_BY_ID[o.sp];
-  const hex = spec ? spec.color : '#D7E3E3';
-  if (!_spRgb[hex]) _spRgb[hex] = hexToRgb(hex);
-  const [r,g,b] = _spRgb[hex];
-  return `rgb(${r},${g},${b})`;
-}
+function cladeColor(k){ return CLADE_COLORS[k % CLADE_COLORS.length]; }
+function organismColor(o){ return cladeColor(o.clade || 0); }
 
 function drawWell(){
   if (!_wellCtx || !state) return;
@@ -188,7 +181,7 @@ function drawCensus(){
   let peak = 1;
   for (const s of hist){
     let tot = 0;
-    for (const id of state.activeSpecies) tot += (s.counts[id]||0);
+    for (const v of (s.clades||[])) tot += v;
     if (tot > peak) peak = tot;
   }
 
@@ -196,12 +189,13 @@ function drawCensus(){
   for (let i = 0; i < hist.length; i++){
     const s = hist[i];
     let acc = 0;
-    for (const id of state.activeSpecies){
-      const v = s.counts[id] || 0;
+    const sizes = s.clades || [];
+    for (let id = 0; id < sizes.length; id++){
+      const v = sizes[id];
       if (v <= 0){ continue; }
       const h0 = (acc / peak) * H;
       const h1 = ((acc + v) / peak) * H;
-      ctx.fillStyle = (SPECIES_BY_ID[id] && SPECIES_BY_ID[id].color) || PAL.chalk;
+      ctx.fillStyle = cladeColor(Number(id));
       ctx.fillRect(i*cw, H - h1, Math.max(1, cw + 0.6), Math.max(1, h1 - h0));
       acc += v;
     }
@@ -211,7 +205,7 @@ function drawCensus(){
   ctx.font = `600 ${Math.round(9.5*dpr)}px ui-monospace, Menlo, monospace`;
   ctx.textBaseline = 'top';
   ctx.fillStyle = PAL.chalkDim;
-  ctx.fillText('CENSUS', 6, 4);
+  ctx.fillText('CENSUS \u00b7 ' + ((hist[hist.length-1]||{}).nClades || 0) + ' SPECIES', 6, 4);
   ctx.textAlign = 'right';
   ctx.fillText('peak ' + peak, W - 6, 4);
   ctx.textAlign = 'left';
