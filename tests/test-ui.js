@@ -94,5 +94,35 @@ check('closing hides the panel', els.aboutPanel.hidden === true);
 check('closing hides the backdrop', els.aboutBackdrop.hidden === true);
 check('closing does not affect the sim run state', state.running === runningBefore);
 
+/* --- the bug that mock-DOM tests above CANNOT catch ---
+   Every check up to here uses a plain JS object standing in for the DOM, so it only
+   proves the JS sets `.hidden` correctly — it says nothing about whether the actual
+   browser CSS cascade respects that. It didn't, once: `#aboutPanel{ display:flex }`
+   is an ID selector (specificity 1,0,0), which OUTRANKS the browser's built-in
+   `[hidden]{ display:none }` (an attribute selector, 0,1,0). Setting `.hidden = true`
+   correctly set the DOM attribute; the panel stayed visibly on screen anyway,
+   because the ID rule's `display:flex` won the cascade regardless. Only
+   #aboutBackdrop actually disappeared (it declares no `display` of its own), so
+   closing looked half-broken — the darkening vanished, the dialog didn't.
+   No headless test with a mocked getElementById can see this; it can only be caught
+   by asserting the actual CSS source carries the fix. This check reads the real
+   shell.html template (not the mocked DOM) and would fail again if the override
+   rule were ever deleted or a future panel repeated the same mistake. */
+if (typeof require !== 'undefined'){
+  try {
+    const fs = require('fs');
+    // process.cwd(), not __dirname: this file is invoked two different ways in
+    // practice (`cat ... | node`, reading from stdin, and copied to a scratch path
+    // for direct execution) and __dirname resolves differently under each. cwd is
+    // reliable because every documented invocation (see README.md) runs from the
+    // project root.
+    const html = fs.readFileSync(require('path').join(process.cwd(), 'src', 'shell.html'), 'utf8');
+    check('the CSS explicitly restores display:none when #aboutPanel is hidden (see the "why" comment above)',
+          /#aboutPanel\[hidden\]\s*\{[^}]*display\s*:\s*none/.test(html));
+  } catch(e){
+    console.log('  (skipped CSS-source check: could not read src/shell.html from', process.cwd(), '—', e.message, ')');
+  }
+}
+
 console.log(`\n${pass}/${pass+fail} checks passed`);
 if(fail) process.exit(1);

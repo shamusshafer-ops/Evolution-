@@ -109,6 +109,15 @@
     background:var(--medium); border:1px solid var(--rule); border-radius:3px;
     box-shadow:0 20px 60px rgba(0,0,0,0.5);
   }
+  /* `#aboutPanel{ display:flex }` above is an ID selector (specificity 1,0,0), which
+     OUTRANKS the browser's built-in `[hidden]{ display:none }` (an attribute
+     selector, specificity 0,1,0). Without this rule, toggling the `hidden` property
+     from JS has no visual effect on the panel — only #aboutBackdrop (which never
+     declares its own `display`) actually hides correctly, so closing looked like it
+     did nothing: the backdrop vanished but the panel stayed on screen regardless of
+     what closeAbout() set. `#aboutPanel[hidden]` is specificity (1,1,0), which wins
+     back over the plain ID rule and restores the intended behaviour. */
+  #aboutPanel[hidden]{ display:none; }
   .aboutHead{
     display:flex; align-items:center; justify-content:space-between;
     padding:12px 14px; border-bottom:1px solid var(--rule); flex:none;
