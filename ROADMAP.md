@@ -52,6 +52,18 @@ a fixed endpoint, which would be a coin flip on timing.
 
 Population fell ~970 -> ~400 with sex: the twofold cost, correct but a real change.
 
+## Fixed — auto-pause was indistinguishable from a manual pause
+
+The sim auto-pauses when the tab is backgrounded (deliberate — a backgrounded run
+burns battery for nothing visible). It gave no indication why, so it looked exactly
+like the sim had silently stopped. Fixed 2026-07-30: `UI.autoPaused` now
+distinguishes an auto-pause from anything the player did, and a banner explains it.
+Any deliberate action (Run, spacebar, seed change, reset, reroll) clears the flag
+immediately — a stale banner after the player has retaken control would be its own
+small version of the same bug. `tests/test-ui.js`, 11 checks, including the one that
+matters most: a MANUAL pause must never show the auto-pause message, since a false
+explanation is worse than no explanation.
+
 ## Open decision — clade colour stability
 
 Clade colours are assigned by size rank, so a lineage's colour can change between samples

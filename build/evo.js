@@ -1003,7 +1003,7 @@ function drawAll(){ drawWell(); drawRibbon(); drawCensus(); }
    are the ones the player asked for (start/pause/reset/scenario/speed).
    ========================================================================== */
 
-const UI = { els:{}, lastPaint:0 };
+const UI = { els:{}, lastPaint:0, autoPaused:false };
 
 function $(id){ return document.getElementById(id); }
 
@@ -1087,10 +1087,17 @@ function paintReadouts(){
 
   const ex = $('extinct');
   if (ex) ex.hidden = !extinct();
+  const ap = $('autopaused');
+  if (ap) ap.hidden = !UI.autoPaused;
 }
 
-function setRunning(on){
+/* `auto` distinguishes a background-tab pause from anything the player did. Any
+   DELIBERATE action — the Run button, spacebar, seed change, reset, reroll —
+   clears the flag, so the banner never lingers past the moment the player has
+   actually taken control back. */
+function setRunning(on, auto){
   state.running = on;
+  UI.autoPaused = !!(auto && !on);
   const b = $('btnRun');
   if (b){ b.textContent = on ? 'Pause' : 'Run'; b.setAttribute('aria-pressed', String(on)); }
 }
@@ -1140,7 +1147,7 @@ function bindUI(){
 
   // A simulation left running in a background tab burns battery for nothing.
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && state.running){ setRunning(false); }
+    if (document.hidden && state.running){ setRunning(false, true); }
   });
 }
 

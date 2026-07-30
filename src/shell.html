@@ -99,6 +99,10 @@
     margin-top:8px; padding:8px 9px; border:1px solid var(--warn); color:var(--warn);
     font-size:11px; border-radius:2px;
   }
+  #autopaused{
+    margin-top:8px; padding:8px 9px; border:1px solid var(--sense); color:var(--chalk);
+    font-size:11px; line-height:1.5; border-radius:2px;
+  }
   .foot{ padding:0 14px 10px; color:var(--chalk-dim); font-size:10.5px; }
 
   @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
@@ -163,6 +167,7 @@
           <dt>Died</dt><dd id="statDied">—</dd>
         </dl>
         <div id="extinct" hidden>Population extinct. Reset, or pick a gentler pressure.</div>
+        <div id="autopaused" hidden>Paused — this tab went to the background. Resuming a backgrounded run wastes battery for nothing you could see, so it stops on its own. Press Run to continue.</div>
       </div>
     </section>
 
