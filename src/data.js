@@ -111,6 +111,72 @@ const MATE = {
   maxTraitDistance: 0.12,
 };
 
+/* ---------- Seasons ----------
+   Periodic modulation of food supply. period is in ticks; the whole feature lives in
+   getting that number right relative to generation time. Too fast and it averages to
+   the static mean — organisms cannot track a cycle shorter than the time it takes to
+   reproduce into it. Too slow and it is indistinguishable from a scenario change
+   partway through a run. Tuned by sweep; see ROADMAP.
+
+   Because organisms here have no phenotypic plasticity — a genotype's traits are
+   fixed for its whole life — a season fast enough to matter should favour a
+   bet-hedging generalist over either specialist's peak-season optimum. That is a
+   real, falsifiable prediction and the reason to build this at all rather than
+   leaving it as flavour. */
+const SEASON = {
+  period: 2200,            // ticks per full cycle
+  amplitude: 0.55,         // food multiplier swings between (1-amp) and (1+amp)
+};
+// Gated by the SCENARIO's cfg.seasonal at the call site, not by a flag in here — an
+// earlier version double-gated on a global SEASON.enabled that nothing ever set,
+// which silently made every "seasonal" run identical to Temperate. Caught by
+// test-environment.js asserting the multiplier actually leaves 1.0.
+function seasonalMultiplier(tick){
+  return 1 + SEASON.amplitude * Math.sin((2 * Math.PI * tick) / SEASON.period);
+}
+
+/* ---------- Shocks ----------
+   Discrete events, player-triggered or scheduled, layered temporarily over the
+   active scenario's cfg. A shock is a distinct phenomenon from ordinary selection: a
+   population crashing from 400 to 20 loses genetic variance through DRIFT, whether
+   or not any trait was advantageous going in. That is worth showing on its own,
+   independent of anything the ribbon or census already demonstrates. */
+const SHOCKS = [
+  { id:'drought', name:'Drought', duration:900,
+    blurb:'Food supply collapses for a while. Tests metabolic thrift under acute scarcity.',
+    patch:{ foodPerTick:0.15, clumped:true } },
+  { id:'bloom',   name:'Bloom',   duration:700,
+    blurb:'A temporary glut. Tests whether thrift, unrewarded, actually decays.',
+    patch:{ foodPerTick:9.0 } },
+  { id:'cull',    name:'Die-off', duration:0,
+    blurb:'An instantaneous 70% mortality, indiscriminate of trait value. Drift, not selection.',
+    cullFraction:0.70 },
+];
+const SHOCKS_BY_ID = {};
+for (const s of SHOCKS) SHOCKS_BY_ID[s.id] = s;
+
+/* ---------- Migration / patches ----------
+   No second world. Two resource clusters at opposite ends of the SAME well, joined by
+   a wide low-food gap, reuse every existing system — the food grid, the mating grid,
+   the movement model — with zero new spatial data structures. The gap does the work:
+   MATE.radius (26 units) already means organisms cannot find a mate across empty
+   space, so distance becomes a real barrier to gene flow without any new isolation
+   mechanic. This is what lets the sim show ALLOPATRIC speciation — geographic
+   isolation, no mate-choice required — as the other classical mode alongside the
+   sympatric (trait-distance) speciation M3 already demonstrated.
+   `patchOf` is measurement only: which side of the gap an organism is on, derived
+   from position, purely to correlate clade membership with geography afterward. */
+const PATCH = {
+  gapFrac: 0.30,   // fraction of world width left empty in the middle
+};
+function patchOf(o, cfgW){
+  const w = cfgW || WORLD.w;
+  const lo = w * (0.5 - PATCH.gapFrac/2), hi = w * (0.5 + PATCH.gapFrac/2);
+  if (o.x < lo) return 'west';
+  if (o.x > hi) return 'east';
+  return 'gap';
+}
+
 /* ---------- Life cycle ---------- */
 const LIFE = {
   startEnergy:   140,      // scaled by mass at birth
@@ -175,6 +241,21 @@ const SCENARIOS = [
      difference a second resource makes: one survivor here, two there. */
   { id:'mono',      name:'Monoculture', blurb:'One resource only, otherwise identical to Oasis. Nowhere to specialise, so the best competitor takes everything.',
     patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:14, clumpRadius:24, singleResource:true } },
+
+  /* Two site clusters at opposite ends of the world, a wide empty gap between them.
+     Otherwise identical resource total to Oasis, so any difference in outcome is the
+     geography, not the food. The scientific point of this scenario: clade membership
+     should correlate with WHICH SIDE an organism is on, not with diet — the opposite
+     signature from Oasis, where clades correlate with diet and not with position.
+     Same mechanism (assortative mating via MATE.radius), applied through distance
+     instead of trait preference. */
+  { id:'archipelago', name:'Archipelago', blurb:'Two resource clusters, a wide empty gap between them. Distance alone can end gene flow -- no dietary preference required.',
+    patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:14, clumpRadius:22, twoPatches:true } },
+
+  /* Identical to Temperate except food supply oscillates. Compare against Temperate
+     directly: same mean food, only the variance over time differs. */
+  { id:'seasonal',  name:'Seasonal',   blurb:'Same average food as Temperate, but it swings between feast and lean. Tests whether a fluctuating environment favours a generalist a static one would not.',
+    patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34, seasonal:true } },
 ];
 
 /* ---------- Palette (darkfield microscopy) ----------

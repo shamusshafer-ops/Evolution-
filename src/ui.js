@@ -65,6 +65,45 @@ function paintSpecies(){
 
 function buildSpeciesList(){ paintSpecies(); }
 
+/* One button per shock, disabled while a patch-based shock is already active — this
+   mirrors triggerShock()'s own refusal contract rather than fighting it: better to
+   show the player why a button won't do anything than to let them click it and
+   wonder why nothing happened. Cull is never disabled, since it doesn't conflict. */
+function buildShockButtons(){
+  const host = $('shocks');
+  if (!host) return;
+  host.innerHTML = '';
+  for (const sh of SHOCKS){
+    const b = document.createElement('button');
+    b.className = 'chip';
+    b.textContent = sh.name;
+    b.title = sh.blurb;
+    b.onclick = () => { triggerShock(sh.id); paintShocks(); };
+    host.appendChild(b);
+  }
+}
+function paintShocks(){
+  const active = (state && state.activeShocks) || [];
+  const patchShock = active.find(sh => SHOCKS_BY_ID[sh.id].patch);
+  const host = $('shocks');
+  if (host){
+    for (const btn of host.children){
+      const sh = SHOCKS.find(s => s.name === btn.textContent);
+      btn.disabled = !!(patchShock && sh && sh.patch);
+    }
+  }
+  const banner = $('shockActive');
+  if (banner){
+    if (patchShock){
+      const left = Math.max(0, patchShock.until - state.tick);
+      banner.hidden = false;
+      banner.textContent = `${patchShock.name} active — ${left} ticks remaining.`;
+    } else {
+      banner.hidden = true;
+    }
+  }
+}
+
 function fmt(n, d){ return (n==null||!isFinite(n)) ? '—' : n.toFixed(d==null?2:d); }
 
 function paintReadouts(){
@@ -84,6 +123,7 @@ function paintReadouts(){
   }
 
   paintSpecies();
+  paintShocks();
 
   const ex = $('extinct');
   if (ex) ex.hidden = !extinct();
@@ -112,6 +152,7 @@ function restart(opts){
   fitCanvases();
   buildScenarioButtons();
   buildSpeciesList();
+  buildShockButtons();
   setRunning(wasRunning);
   paintReadouts();
   drawAll();

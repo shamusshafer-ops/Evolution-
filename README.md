@@ -74,6 +74,29 @@ Speciation from a single founding population occurred in **5/5 seeds**, median w
 speciated at 10k and was back to one species by 40k. Under a single resource
 (Monoculture) no seed ever speciates — there is nowhere to specialise onto.
 
+## Environmental dynamics
+
+**Shocks** — Drought, Bloom, Die-off — are player-triggered, temporary overlays on
+the active scenario. Die-off is instantaneous and indiscriminate of trait value:
+that's drift, a distinct phenomenon from selection, shown on its own.
+
+**Seasons** oscillate food supply. The hypothesized trait-level effect (fast seasons
+favouring a bet-hedging generalist) didn't show up cleanly — what's real and
+reproducible instead is a population boom-bust lag cycle: population peaks near the
+food-scarce phase, not the abundant one, and crashes hard afterward. Reproductive lag
+causing overshoot into decline, from smooth periodic forcing alone.
+
+**Migration** (the Archipelago scenario) reuses the existing single world: two
+resource clusters at opposite ends, joined by an empty gap wide enough that mate-
+finding (`MATE.radius`) can't cross it. This gives the sim its second, independent
+mode of speciation — **allopatric** (geographic isolation, no mate-choice required)
+alongside the **sympatric** speciation Oasis already demonstrated (trait-distance,
+no geography required):
+
+| | Rate (10 seeds, 40k ticks) | Geographic sorting |
+|---|---|---|
+| Archipelago | 7/10 | mean 0.752 (1.0 = perfect sorting by side) |
+
 ## Determinism
 
 Every random draw goes through a seeded PRNG. Nothing calls `Math.random`. The same seed

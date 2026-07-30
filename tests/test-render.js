@@ -22,14 +22,19 @@ globalThis.devicePixelRatio = 2;
 initWorld({seed:'render', scenario:'oasis'});
 check('initRender succeeds with canvases present', initRender()===true);
 let threw=null;
-try{ for(let i=0;i<400;i++) step(); drawAll(); }catch(e){ threw=e; }
+try{ for(let i=0;i<800;i++) step(); drawAll(); }catch(e){ threw=e; }
 check('drawAll does not throw', threw===null);
 if(threw) console.log('   ', threw.message);
 check('well was painted', (calls.fillRect||0) > 0);
 check('organisms were drawn', (calls.arc||0) > 0);
 check('ribbon drew trait labels', (calls.fillText||0) >= TRAITS.length);
 check('ribbon buffer populated', state.ribbon.length > 5);
-check('census buffer populated', state.census.length > 5);
+/* census now samples on its own coarser cadence (every censusSampleEvery ticks,
+   default 240) than the ribbon/history (every sampleEvery, default 30) — split
+   deliberately because computeSpecies() is O(pop^2) and doesn't need 30-tick
+   freshness. This smoke test's job is "does painting the census strip crash", not
+   "is the buffer densely populated", so the threshold only needs >=1 sample, not >5. */
+check('census buffer populated', state.census.length >= 1);
 check('ribbon histograms have one entry per trait',
       Object.keys(state.ribbon[0]).length === TRAITS.length);
 

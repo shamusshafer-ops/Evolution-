@@ -93,6 +93,10 @@
   .sprow.out .spname, .sprow.out .spcount{ color:var(--chalk-dim); text-decoration:line-through; }
   .spname{ flex:1; font-size:11.5px; }
   .spcount{ font-variant-numeric:tabular-nums; font-size:12px; }
+  #shockActive{
+    margin-top:8px; padding:8px 9px; border:1px solid var(--food); color:var(--chalk);
+    font-size:11px; line-height:1.5; border-radius:2px;
+  }
   .spsub{ display:block; color:var(--chalk-dim); font-size:10px; letter-spacing:.02em; margin-top:1px; }
 
   #extinct{
@@ -151,6 +155,14 @@
       <div class="body">
         <div id="scenarios"></div>
         <p id="scenarioBlurb"></p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Events</h2>
+      <div class="body">
+        <div id="shocks"></div>
+        <div id="shockActive" hidden></div>
       </div>
     </section>
 

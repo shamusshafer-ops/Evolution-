@@ -10,7 +10,7 @@
 |17| ~~Species differ on one axis only~~ | Obsolete — hardcoded species removed entirely in M3, so the confound no longer exists | — | **Closed 2026-07-30** |
 |13| Sexual reproduction + recombination | Prerequisite for speciation — no gene flow to interrupt without it | L | **Shipped 2026-07-30** |
 |14| Emergent speciation via mating distance | Species derived as connected components of the interbreeding graph, not declared | L | **Shipped 2026-07-30** |
-|15| Environmental dynamics: seasons, shocks, migration between patches | Static scenarios cannot show fluctuating selection, a major real driver of maintained diversity. Ranked #2 by owner | M | Next up |
+|15| Environmental dynamics: seasons, shocks, migration between patches | Static scenarios cannot show fluctuating selection, a major real driver of maintained diversity | M | **Shipped 2026-07-30** |
 |18| Clade colour/identity stability | Colours are size-ranked so they flicker when ranks swap; needs lineage tracking (#2) to fix properly | S | Backlog |
 |19| Artificial-selection mode | Player becomes the selective pressure; the Darwin-and-pigeon-breeders contrast. Ranked #4 by owner | M | Backlog |
 |7| Trait correlation view (scatter) | Are fast organisms also small? The ribbon cannot show joint distributions | M | Backlog |
@@ -19,3 +19,7 @@
 |10| Energy-cost breakdown inspector | Click an organism, see basal/travel/vision split | S | Backlog |
 |11| Mutation rate as a run parameter | Currently fixed per trait in data.js; exposing it is a strong teaching lever | S | Backlog |
 |12| Carrying-capacity readout | Population always saturates to food supply; make that visible rather than implicit | S | Backlog |
+
+|20| Season UI indicator (current phase readout) | Deferred from M4 for time; mechanism works, just no visible readout of where in the cycle a run is | S | Backlog |
+|21| Proper per-field shock stacking | Currently overlapping patch-shocks are refused rather than composed; would need per-field ownership tracking to do correctly | M | Backlog |
+|22| Investigate the seasonal boom-bust lag cycle further | Found unexpectedly during M4 -- reproductive lag causing population overshoot-crash from smooth periodic forcing alone. Worth deliberately tuning/studying rather than leaving as an observed side-effect | M | Backlog |

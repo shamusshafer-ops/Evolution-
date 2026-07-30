@@ -62,13 +62,15 @@ function makeState(opts){
     sites: [],
     census: [],           // per-sample population by clade — where exclusion becomes visible
     clades: [],           // emergent species, recomputed in sampleHistory()
+    activeShocks: [],     // shocks currently overlaying cfg, with restore snapshots
     foodCarry: 0,
     running: false,
     speedMult: 1,
-    stats: { born:0, starved:0, aged:0, eaten:0, peakPop:0, unmated:0 },
+    stats: { born:0, starved:0, aged:0, eaten:0, peakPop:0, unmated:0, culled:0 },
     history: [],          // per-sample trait means
     ribbon: [],           // per-sample trait HISTOGRAMS, for the drift ribbon
     sampleEvery: 30,
+    censusSampleEvery: 240,  // 8x coarser than sampleEvery -- see sampleCensus()
   };
 }
 
@@ -129,10 +131,31 @@ function seedSites(){
   const n = cfg.siteCount || 26;
   state.sites = [];
   for (let i = 0; i < n; i++){
+    let x, y;
+    if (cfg.twoPatches){
+      // Confine sites to the two ends, leaving PATCH.gapFrac empty in the middle.
+      // This is the entire migration mechanism: no organism placement code changes,
+      // no second world, no new movement rule. The gap is just where the food isn't.
+      const side = i % 2 === 0 ? 0 : 1;   // alternate so both patches get equal food
+      const lo = side === 0 ? 0 : cfg.w * (0.5 + PATCH.gapFrac/2);
+      const hi = side === 0 ? cfg.w * (0.5 - PATCH.gapFrac/2) : cfg.w;
+      x = lo + rnd() * (hi - lo);
+      y = rnd() * cfg.h;
+    } else {
+      x = rnd()*cfg.w; y = rnd()*cfg.h;
+    }
     // Resource type is a property of the SITE, so the two resources are spatially
     // separated as well as dietarily distinct. Without spatial structure both
     // specialists forage the same ground and only the diet axis partitions them.
-    state.sites.push({ x: rnd()*cfg.w, y: rnd()*cfg.h, t: cfg.singleResource ? 0 : (i % FOOD_TYPES.length) });
+    // Resource type is assigned independently of side/index. It must NOT correlate
+    // with `side` above: an earlier version used the same i%2 parity for both, which
+    // silently made every west site type-0 and every east site type-1 — archipelago
+    // would then have been testing geography CONFOUNDED with diet, undermining the
+    // entire point of the scenario (that distance alone, with no dietary preference,
+    // is enough to end gene flow). Caught by test-environment.js asserting each
+    // patch's sites carry a roughly even mix of both types.
+    const ftype = cfg.singleResource ? 0 : (rnd() < 0.5 ? 0 : 1);
+    state.sites.push({ x, y, t: ftype });
   }
 }
 
@@ -171,7 +194,17 @@ function initWorld(opts){
   for (let i = 0; i < LIFE.startPop; i++){
     const traits = {};
     for (const t of TRAITS) traits[t.key] = clamp(t.init + rndNorm()*t.sigma*FOUNDER.spread, t.min, t.max);
-    state.organisms.push(makeOrganism(rnd()*state.cfg.w, rnd()*state.cfg.h, traits, 1));
+    let fx = rnd()*state.cfg.w, fy = rnd()*state.cfg.h;
+    if (state.cfg.twoPatches){
+      // Found BOTH patches, not just wherever a uniform draw happens to land — a
+      // single founding population that only later disperses would make the west/
+      // east split a founder effect from placement, not from migration limits.
+      const side = i % 2 === 0 ? 0 : 1;
+      const lo = side===0 ? 0 : state.cfg.w*(0.5+PATCH.gapFrac/2);
+      const hi = side===0 ? state.cfg.w*(0.5-PATCH.gapFrac/2) : state.cfg.w;
+      fx = lo + rnd()*(hi-lo);
+    }
+    state.organisms.push(makeOrganism(fx, fy, traits, 1));
   }
   computeSpecies();
 
@@ -290,6 +323,63 @@ function reproduceSexual(a, b){
   return child;
 }
 
+/* ---------- Shock triggering ----------
+   A shock temporarily overlays fields onto state.cfg, exactly the way a scenario's
+   own `patch` does at init — reusing that mechanism rather than inventing a second
+   one. The pre-shock values are snapshotted so expiry can restore them exactly,
+   including when two shocks overlap (last-triggered wins the overlay, first-to-
+   expire restores only what IT changed, which is the correct LIFO behaviour for a
+   list of active shocks).
+
+   `cull` is different in kind: it is instantaneous population mortality, not an
+   environmental patch, and is applied once at trigger time rather than held open. */
+function triggerShock(id){
+  const def = SHOCKS_BY_ID[id];
+  if (!def) return false;
+  if (def.cullFraction != null){
+    const n = Math.floor(state.organisms.length * def.cullFraction);
+    // Indiscriminate of trait value — this is drift, not selection, and the whole
+    // point of modelling it is that it does NOT sample by fitness.
+    for (let i = 0; i < n && state.organisms.length > 0; i++){
+      const idx = (rnd() * state.organisms.length) | 0;
+      state.organisms.splice(idx, 1);
+    }
+    state.stats.culled = (state.stats.culled || 0) + n;
+    computeSpecies();
+    return true;
+  }
+  if (def.patch){
+    // Overlapping patch-based shocks are refused rather than stacked. A first
+    // attempt let them stack with independent snapshot/restore per shock, and it
+    // was wrong: drought's snapshot only knows cfg's value from BEFORE drought
+    // started, so when drought expired it unconditionally restored that value even
+    // if bloom — triggered later, still active — had since overridden the same
+    // field. That clobbered bloom's effect on drought's schedule, not bloom's.
+    // Correct stacking needs per-field ownership tracking; refusing the ambiguity
+    // entirely is simpler, easier to reason about, and arguably better UX besides —
+    // a player watching two environmental effects fight over the same number is
+    // confusing regardless of whether the engine gets the arithmetic right.
+    const patchActive = (state.activeShocks||[]).some(sh => SHOCKS_BY_ID[sh.id].patch);
+    if (patchActive) return false;
+    const snapshot = {};
+    for (const k in def.patch) snapshot[k] = state.cfg[k];
+    Object.assign(state.cfg, def.patch);
+    state.activeShocks = state.activeShocks || [];
+    state.activeShocks.push({ id, name:def.name, until: state.tick + def.duration, snapshot });
+  }
+  return true;
+}
+
+function updateShocks(){
+  if (!state.activeShocks || !state.activeShocks.length) return;
+  const still = [];
+  for (const sh of state.activeShocks){
+    if (state.tick >= sh.until) Object.assign(state.cfg, sh.snapshot);
+    else still.push(sh);
+  }
+  state.activeShocks = still;
+}
+
 function step(){
   const cfg = state.cfg;
   const fg = buildFoodGrid();
@@ -360,11 +450,18 @@ function step(){
     state.food = keep;
   }
 
-  state.foodCarry += cfg.foodPerTick;
+  const seasonMul = cfg.seasonal ? seasonalMultiplier(state.tick) : 1;
+  state.foodCarry += cfg.foodPerTick * seasonMul;
   const whole = Math.floor(state.foodCarry);
   if (whole > 0){ spawnFood(whole); state.foodCarry -= whole; }
 
   state.tick++;
+  // Checked AFTER the increment, not before: a shock triggered at tick T0 with
+  // duration D should be active for exactly ticks T0..T0+D-1 and gone by the time
+  // state.tick reads T0+D from outside this function. Checking before the increment
+  // compared the OLD tick value against `until`, so restoration landed one full tick
+  // late every time — caught by test-environment.js asserting an exact boundary.
+  updateShocks();
   if (state.organisms.length > state.stats.peakPop) state.stats.peakPop = state.organisms.length;
   if (state.tick % state.sampleEvery === 0) sampleHistory();
 }
@@ -553,6 +650,34 @@ function cladeTraitStats(cid, key){
   return { mean, sd:Math.sqrt(ss/n), min, max, n };
 }
 
+/* Does clade membership correlate with WHICH SIDE of the gap an organism is on?
+   This is the measurement that distinguishes the two modes of speciation the sim can
+   now produce. Sympatric speciation (Oasis, via dietary trait-distance) should show
+   near-ZERO correlation with geography — a specialist can be born on either side.
+   Allopatric speciation (Archipelago, via distance alone) should show STRONG
+   correlation — which clade an organism belongs to is almost entirely predicted by
+   which patch it is on. Reported as a single number: the fraction of organisms whose
+   clade is also the numerically-most-common clade on their side of the gap. 1.0 means
+   perfect sorting by geography; ~0.5 (for two clades) means no relationship. */
+function geographicCladeSorting(){
+  if (!state.cfg.twoPatches) return null;
+  const bySide = { west:{}, east:{} };
+  for (const o of state.organisms){
+    const side = patchOf(o, state.cfg.w);
+    if (side === 'gap') continue;
+    bySide[side][o.clade] = (bySide[side][o.clade]||0) + 1;
+  }
+  function majorityFrac(counts){
+    const vals = Object.values(counts);
+    if (!vals.length) return null;
+    const tot = vals.reduce((a,b)=>a+b,0);
+    return Math.max(...vals) / tot;
+  }
+  const w = majorityFrac(bySide.west), e = majorityFrac(bySide.east);
+  if (w == null || e == null) return null;
+  return (w + e) / 2;
+}
+
 function sampleHistory(){
   const row = { tick: state.tick, pop: state.organisms.length, food: state.food.length, gen: state.generation };
   for (const t of TRAITS) row[t.key] = traitStats(t.key).mean;
@@ -567,8 +692,22 @@ function sampleHistory(){
   state.ribbon.push(col);
   if (state.ribbon.length > 260) state.ribbon.shift();
 
-  // Species census. Stored as absolute counts rather than shares so the strip can
-  // show a population collapsing outright versus merely losing ground.
+  // computeSpecies() is deliberately NOT called here. See sampleCensus() below —
+  // this function stays cheap (O(pop)) so it can run every 30 ticks without cost.
+  if (state.tick % state.censusSampleEvery === 0) sampleCensus();
+}
+
+/* Species/census sampling runs on its own, coarser cadence. computeSpecies() is
+   O(pop^2) — union-find over every pair — and calling it at the same 30-tick
+   cadence as the cheap trait/population history made a 40,000-tick run cost roughly
+   11 seconds of CPU on this container, essentially all of it in this one function
+   (measured: ~1,333 calls at n~400 versus ~167 at the coarser cadence below, an ~8x
+   cut). A species split unfolds over tens of thousands of ticks; nothing meaningful
+   is lost by observing it every 240 ticks instead of every 30 — the ribbon and
+   population history stay at full resolution, only species/census freshness is
+   coarser, and that coarseness is imperceptible at the timescale the phenomenon
+   itself operates on. */
+function sampleCensus(){
   computeSpecies();   // emergent species are derived, so they must be recomputed, not stored
   const cen = { tick: state.tick, clades: (state.clades||[]).map(c=>c.n), nClades: viableSpeciesCount() };
   state.census.push(cen);

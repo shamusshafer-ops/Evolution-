@@ -35,11 +35,37 @@ check('a manual pause does not set the auto-pause flag', UI.autoPaused === false
 paintReadouts();
 check('the banner stays hidden for a manual pause', els.autopaused.hidden === true);
 
-/* --- restart() clears it too, so a stale banner cannot survive a reset --- */
+/* --- restart clears the auto-pause flag too, so a stale banner cannot survive a reset --- */
 setRunning(false, true);
 check('flag is set before reset', UI.autoPaused === true);
 restart({ seed:'ui2' });
 check('restart clears the auto-pause flag', UI.autoPaused === false);
+
+/* --- shock buttons: disabled while a patch-based shock is blocking, banner shows
+   remaining time, and cull's button is never disabled since it never conflicts --- */
+els.shocks = { children: SHOCKS.map(sh => ({ textContent: sh.name, disabled: false })), innerHTML:'' };
+els.shockActive = { hidden:true, textContent:'' };
+initWorld({seed:'shockui', scenario:'temperate'});
+paintShocks();
+check('no shock active -> banner hidden', els.shockActive.hidden === true);
+check('no shock active -> no button disabled',
+      els.shocks.children.every(b => b.disabled === false));
+
+triggerShock('drought');
+paintShocks();
+check('a patch shock active -> the other patch shock button is disabled',
+      els.shocks.children.find(b=>b.textContent==='Bloom').disabled === true);
+check("the same patch shock's own button is also shown disabled (already running)",
+      els.shocks.children.find(b=>b.textContent==='Drought').disabled === true);
+check("cull's button is never disabled by a patch shock",
+      els.shocks.children.find(b=>b.textContent==='Die-off').disabled === false);
+check('the banner shows while a patch shock is active', els.shockActive.hidden === false);
+
+for(let i=0;i<SHOCKS_BY_ID.drought.duration;i++) step();
+paintShocks();
+check('the banner clears once the shock expires', els.shockActive.hidden === true);
+check('buttons re-enable once the shock expires',
+      els.shocks.children.every(b => b.disabled === false));
 
 console.log(`\n${pass}/${pass+fail} checks passed`);
 if(fail) process.exit(1);

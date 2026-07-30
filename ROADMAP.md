@@ -52,6 +52,92 @@ a fixed endpoint, which would be a coin flip on timing.
 
 Population fell ~970 -> ~400 with sex: the twofold cost, correct but a real change.
 
+## Status
+
+**M4 shipped (2026-07-30).** Environmental dynamics: shocks, seasons, migration —
+all three built together, as scoped, rather than sequenced. 102 tests total.
+
+### Shocks
+
+Three: Drought (food -95% for 900 ticks), Bloom (food +200% for 700 ticks), Die-off
+(instant 30% cull, indiscriminate of trait value — drift, not selection). Two real
+bugs found building this:
+- **Off-by-one expiry.** `updateShocks()` checked `state.tick` before it incremented,
+  so every shock ran one tick longer than configured. Fixed by checking after the
+  increment.
+- **Overlapping shocks corrupted each other.** Drought's restore-snapshot only knows
+  cfg's value from before drought started. If bloom triggers while drought is still
+  active and drought expires first, drought's snapshot restore clobbers bloom's still-
+  active override with drought's stale baseline. Proper fix needs per-field ownership
+  stacking; the simpler, correct fix taken instead is to REFUSE a second patch-based
+  shock while one is active (`triggerShock()` returns `false`). Cull is unaffected —
+  it has no patch, so it never conflicts.
+
+### Seasons
+
+`cfg.foodPerTick` now oscillates via `seasonalMultiplier(tick)`. Shipped with an
+honest limitation: the hypothesized effect (fast seasons favour a bet-hedging
+generalist over either specialist's peak-season optimum, since organisms have no
+phenotypic plasticity) does NOT show cleanly in a period sweep — trait-SD elevation
+over the static control is real but small and non-monotonic with period. Rather than
+overclaim it, the actual measured, reproducible finding is different: a population
+BOOM-BUST LAG CYCLE. Population peaks near the food-scarce phase (not the abundant
+one) and crashes hard afterward — reproductive lag causing overshoot into decline,
+a classic delayed-logistic dynamic from smooth periodic forcing alone, no predator
+needed. Identical peak/trough population values across 3 different seeds during the
+early transient (before genetic variance has time to diverge trajectories).
+
+Also fixed: `seasonalMultiplier()` checked a global `SEASON.enabled` flag that
+NOTHING ever set — the Seasonal scenario correctly set `cfg.seasonal`, but the
+function checked a different, dead flag, so every "seasonal" run was silently
+identical to Temperate. Caught by asserting the multiplier actually leaves 1.0.
+
+### Migration — the Archipelago scenario
+
+Two resource clusters at opposite ends of the world, a wide empty gap between them.
+No second spatial world was built: `MATE.radius` (26 units) already means an organism
+cannot find a mate across empty space, so distance alone becomes a real barrier to
+gene flow with zero new spatial data structures.
+
+**The payoff:** this is the sim's second, independent mode of speciation —
+ALLOPATRIC (geographic isolation, no mate-choice mechanism required) alongside the
+SYMPATRIC speciation Oasis already demonstrated (trait-distance/mate-choice, no
+geography required). Measured across 10 seeds, 40,000 ticks:
+
+| | Rate | Timing | Geographic sorting |
+|---|---|---|---|
+| Archipelago (allopatric) | 7/10 | 12,000-20,000 | mean 0.752 (range 0.635-0.895) |
+
+Sorting near 1.0 = clade membership is almost entirely predicted by which side of the
+gap an organism is on. ~0.5 would mean no relationship. 0.75 mean is strong, real
+geographic structuring.
+
+**A confound found and fixed, same class as the M3 diet-vs-foraging one:** site
+`side` and resource `type` were both derived from the same `i%2` parity, so every
+west site was silently type-0 and every east site type-1. Archipelago would have been
+testing geography CONFOUNDED with diet — undermining the entire point (that distance
+alone, no dietary preference, is enough). Decoupled with an independent random draw.
+
+### Test-budget sizing, not a performance bug
+
+Verifying all this at realistic scale (40k ticks, 10 seeds) costs ~10s of CPU per
+run — genuine simulation cost, not a bug (profiled: `computeSpecies()` is only ~2%
+of it). Chased as a possible regression first, ruled out, then correctly resized: the
+PERSISTED test suite uses 24,000 ticks / 6 seeds (all observed hits for oasis and
+archipelago land at or before 20,000, so nothing is lost); the deeper 40k/10-seed
+sweep is a one-time measurement, recorded above, not something every test run repeats.
+Also split `computeSpecies()` off the 30-tick history cadence onto its own 240-tick
+`censusSampleEvery` cadence — a real, if smaller, win (O(pop^2) doesn't need 30-tick
+freshness), kept regardless of it not being the dominant cost.
+
+**A found-and-fixed non-adaptive-speciation result, correcting an earlier overclaim:**
+Monoculture — previously asserted to "never speciate" — DOES speciate through drift
+alone in rare cases (2/10 seeds, ticks 37,000 and 39,000, far later and far rarer
+than Archipelago's ecologically-driven splits). Real biology: non-adaptive
+(drift-driven) speciation exists alongside adaptive speciation, just far rarer and
+slower with no ecological difference to drive it. The absolute claim was wrong;
+fixed to a rate/timing comparison instead of an always/never assertion.
+
 ## Fixed — auto-pause was indistinguishable from a manual pause
 
 The sim auto-pauses when the tab is backgrounded (deliberate — a backgrounded run

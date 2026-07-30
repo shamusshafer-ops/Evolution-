@@ -20,6 +20,7 @@ function boot(){
   buildScenarioButtons();
   buildTraitLegend();
   buildSpeciesList();
+  buildShockButtons();
   bindUI();
   setRunning(true);
   requestAnimationFrame(frame);
