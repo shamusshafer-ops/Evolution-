@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Selection — a natural-selection instrument</title>
+<style>
+  :root{
+    --well:#0B1417; --medium:#101E24; --grid:#172C33; --rule:#24404A;
+    --chalk:#D7E3E3; --chalk-dim:#7E9298; --food:#6FD3A2;
+    --speed:#E0607E; --size:#E8B04B; --sense:#4EA8DE; --warn:#E8734B;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{
+    background:var(--well); color:var(--chalk);
+    font-family:var(--mono); font-size:13px; line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+    display:flex; flex-direction:column;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  /* ---- masthead: specimen-label typography, not a product header ---- */
+  header{
+    display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;
+    padding:10px 14px 8px; border-bottom:1px solid var(--rule);
+  }
+  h1{
+    margin:0; font-size:14px; font-weight:700; letter-spacing:.22em; text-transform:uppercase;
+  }
+  .sub{ color:var(--chalk-dim); font-size:11px; letter-spacing:.06em; }
+  .spacer{ flex:1; }
+  .ver{ color:var(--chalk-dim); font-size:10.5px; letter-spacing:.14em; }
+
+  main{ flex:1; display:flex; gap:12px; padding:12px 14px; min-height:0; }
+  @media (max-width: 860px){ main{ flex-direction:column; padding:10px; gap:10px; } }
+
+  .stage{ flex:1; display:flex; flex-direction:column; gap:10px; min-width:0; min-height:0; }
+  #well{ flex:1; width:100%; min-height:220px; border:1px solid var(--rule); background:var(--well); display:block; border-radius:2px; }
+  #census{ width:100%; height:96px; border:1px solid var(--rule); display:block; border-radius:2px; flex:none; }
+  #ribbon{ width:100%; height:170px; border:1px solid var(--rule); display:block; border-radius:2px; flex:none; }
+  @media (max-width: 860px){ #ribbon{ height:132px; } #census{ height:76px; } }
+
+  aside{ width:250px; flex:none; display:flex; flex-direction:column; gap:14px; overflow:auto; }
+  @media (max-width: 860px){ aside{ width:100%; } }
+
+  .panel{ border:1px solid var(--rule); border-radius:2px; }
+  .panel h2{
+    margin:0; padding:6px 9px; font-size:10px; font-weight:700; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--chalk-dim); border-bottom:1px solid var(--rule);
+    background:var(--medium);
+  }
+  .panel .body{ padding:9px; }
+
+  /* controls */
+  .row{ display:flex; gap:6px; align-items:center; }
+  .row + .row{ margin-top:8px; }
+  button{
+    font-family:var(--mono); font-size:11.5px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--chalk); background:var(--medium); border:1px solid var(--rule);
+    padding:8px 11px; border-radius:2px; cursor:pointer; min-height:38px;
+  }
+  button:hover{ border-color:var(--chalk-dim); }
+  button:focus-visible{ outline:2px solid var(--sense); outline-offset:2px; }
+  button.primary{ flex:1; }
+  .chip{ padding:7px 10px; font-size:11px; text-transform:none; letter-spacing:.02em; }
+  .chip.on{ border-color:var(--food); color:var(--food); }
+  #scenarios{ display:flex; flex-wrap:wrap; gap:6px; }
+  #scenarioBlurb{ margin-top:8px; color:var(--chalk-dim); font-size:11px; line-height:1.5; }
+
+  input[type=text]{
+    font-family:var(--mono); font-size:12px; color:var(--chalk);
+    background:var(--well); border:1px solid var(--rule); border-radius:2px;
+    padding:8px 9px; width:100%; min-height:38px;
+  }
+  input[type=text]:focus-visible{ outline:2px solid var(--sense); outline-offset:1px; }
+  input[type=range]{ width:100%; accent-color:var(--food); }
+  label{ font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--chalk-dim); display:block; margin-bottom:5px; }
+
+  /* readouts — a specimen label, aligned on the value */
+  .stats{ display:grid; grid-template-columns:1fr auto; gap:3px 10px; }
+  .stats dt{ color:var(--chalk-dim); font-size:11px; }
+  .stats dd{ margin:0; text-align:right; font-variant-numeric:tabular-nums; font-size:12px; }
+
+  .legrow{ display:flex; align-items:center; gap:8px; padding:3px 0; }
+  .dot{ width:9px; height:9px; border-radius:50%; flex:none; }
+  .legname{ flex:1; font-size:11.5px; }
+  .legval{ font-variant-numeric:tabular-nums; font-size:11.5px; color:var(--chalk-dim); }
+  .sprow{ display:flex; align-items:baseline; gap:8px; padding:4px 0; border-bottom:1px solid var(--medium); }
+  .sprow:last-child{ border-bottom:none; }
+  .sprow.out .spname, .sprow.out .spcount{ color:var(--chalk-dim); text-decoration:line-through; }
+  .spname{ flex:1; font-size:11.5px; }
+  .spcount{ font-variant-numeric:tabular-nums; font-size:12px; }
+  .spsub{ display:block; color:var(--chalk-dim); font-size:10px; letter-spacing:.02em; margin-top:1px; }
+
+  #extinct{
+    margin-top:8px; padding:8px 9px; border:1px solid var(--warn); color:var(--warn);
+    font-size:11px; border-radius:2px;
+  }
+  .foot{ padding:0 14px 10px; color:var(--chalk-dim); font-size:10.5px; }
+
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Selection</h1>
+  <span class="sub">natural-selection instrument</span>
+  <span class="spacer"></span>
+  <span class="ver" id="verTag"></span>
+</header>
+
+<main>
+  <div class="stage">
+    <canvas id="well" aria-label="Specimen well: organisms foraging"></canvas>
+    <canvas id="census" aria-label="Population by species over time"></canvas>
+    <canvas id="ribbon" aria-label="Trait drift over generations"></canvas>
+  </div>
+
+  <aside>
+    <section class="panel">
+      <h2>Run</h2>
+      <div class="body">
+        <div class="row">
+          <button id="btnRun" class="primary" aria-pressed="true">Pause</button>
+          <button id="btnReset" title="Restart this seed and scenario">Reset</button>
+        </div>
+        <div class="row" style="margin-top:10px; display:block;">
+          <label for="seed">Seed</label>
+          <input type="text" id="seed" value="origin" spellcheck="false" autocomplete="off">
+        </div>
+        <div class="row">
+          <button id="btnReroll" class="primary">New seed</button>
+        </div>
+        <div class="row" style="margin-top:10px; display:block;">
+          <label for="speed">Ticks per frame <span id="speedLabel">1&times;</span></label>
+          <input type="range" id="speed" min="1" max="20" step="1" value="1">
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Pressure</h2>
+      <div class="body">
+        <div id="scenarios"></div>
+        <p id="scenarioBlurb"></p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Population</h2>
+      <div class="body">
+        <dl class="stats">
+          <dt>Alive</dt><dd id="statPop">—</dd>
+          <dt>Generation</dt><dd id="statGen">—</dd>
+          <dt>Tick</dt><dd id="statTick">—</dd>
+          <dt>Food</dt><dd id="statFood">—</dd>
+          <dt>Born</dt><dd id="statBorn">—</dd>
+          <dt>Died</dt><dd id="statDied">—</dd>
+        </dl>
+        <div id="extinct" hidden>Population extinct. Reset, or pick a gentler pressure.</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Species</h2>
+      <div class="body">
+        <div id="speciesList"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Traits</h2>
+      <div class="body">
+        <div id="legend"></div>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<p class="foot">Space runs and pauses &middot; R resets &middot; same seed always reproduces the same run</p>
+
+<script>
+/*__BUNDLE__*/
+</script>
+<script>
+  try{ var v = document.getElementById('verTag'); if (v) v.textContent = 'v' + VERSION; }catch(e){}
+</script>
+</body>
+</html>
