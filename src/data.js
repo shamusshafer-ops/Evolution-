@@ -6,6 +6,26 @@
 
 const VERSION = '0.1.0';
 
+/* ---------- Changelog ----------
+   Rendered inside the About panel. Newest entry first. This is a standing commitment,
+   not a one-time backfill: every future change that alters what the sim DOES (not
+   pure refactors) gets an entry here, in the same push that ships it. Keep entries
+   short and concrete — what changed and, where there is one, the number that proves
+   it. Entries below are backfilled from ROADMAP.md's real measured findings, not
+   padded to look more eventful than the work was. */
+const CHANGELOG = [
+  { date:'2026-07-30', tag:'M4', title:'Shocks, seasons, migration',
+    text:'Player-triggered Drought/Bloom/Die-off events. Food supply now oscillates in the Seasonal scenario. The Archipelago scenario adds a second, independent mode of speciation — allopatric (geographic isolation alone, no dietary preference) — alongside the sympatric speciation Oasis already showed. Measured: 7/10 seeds speciate, geographic sorting mean 0.752.' },
+  { date:'2026-07-30', tag:'fix', title:'Auto-pause is no longer silent',
+    text:'The sim pauses when the tab is backgrounded (saves battery). It gave no indication why, so it looked like it had simply stopped. Now it says so, and a manual pause never shows the same message.' },
+  { date:'2026-07-30', tag:'M3', title:'Emergent speciation replaces fixed species',
+    text:'The three hardcoded species are gone. One ancestral population; species are now DERIVED as connected components of the interbreeding graph, not declared. Reproduction is sexual with real recombination. Key finding: a bimodal trait distribution is not automatically two species — under free mating the population still splits into two diet morphs, but stays one species until isolation actually severs gene flow.' },
+  { date:'2026-07-29', tag:'M2', title:'Niche partitioning and coexistence',
+    text:'Two resource types plus a heritable diet trait. One resource: competitive exclusion, one species wins. Two resources: specialists partition and coexist. The dietary generalist loses in both — the tradeoff curve is convex.' },
+  { date:'2026-07-29', tag:'M1', title:'First playable',
+    text:'Seeded deterministic sim. Three traits — speed, size, sense — each priced by real allometry, not balance-tuned numbers. Finding: how food is distributed selects harder than how much of it there is.' },
+];
+
 /* ---------- World ---------- */
 const WORLD = {
   w: 900, h: 620,          // simulation units; the canvas scales to fit

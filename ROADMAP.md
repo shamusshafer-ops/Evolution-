@@ -3,6 +3,25 @@
 `ROADMAP.md` is forward-looking and editable in place. Completed session writeups go in
 `ROADMAP-HISTORY.md` (created on first entry), never here.
 
+## Standing practice — in-app changelog
+
+Every future change that alters what the sim DOES gets a `CHANGELOG` entry in
+`src/data.js`, in the same push that ships it — not just a ROADMAP.md note. It
+renders live inside the in-app About panel (the `?` button), so anyone running the
+sim sees what changed without reading git history. This is a checklist item for
+every future slice, the same way `build.js --check` and the full test suite already
+are.
+
+## Added — About panel (2026-07-30)
+
+A `?` button opens an in-app explainer: how to read the specimen well/ribbon/census,
+what each trait costs and why, how speciation actually works here (derived, not
+declared), which scenarios to try and what each demonstrates, and the changelog
+above. Does not touch `state` or pause the run — it's an explainer laid over the sim,
+not a navigation away from it. 9 new tests (`test-ui.js`, now 28) cover open/close,
+that the changelog renders every entry exactly once (no duplicate build on re-open),
+and that opening/closing never touches `state.running`.
+
 ## Status
 
 **M1 shipped (2026-07-29).** Seeded deterministic sim, traits under real allometric

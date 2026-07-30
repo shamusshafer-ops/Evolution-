@@ -22,6 +22,7 @@ function boot(){
   buildSpeciesList();
   buildShockButtons();
   bindUI();
+  bindAbout();
   setRunning(true);
   requestAnimationFrame(frame);
 }

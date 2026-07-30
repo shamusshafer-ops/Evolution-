@@ -97,6 +97,46 @@
     margin-top:8px; padding:8px 9px; border:1px solid var(--food); color:var(--chalk);
     font-size:11px; line-height:1.5; border-radius:2px;
   }
+
+  /* ---- About panel: a modal, not a route change; dismiss without losing the run ---- */
+  #btnAbout{ min-height:0; padding:6px 10px; font-size:13px; font-weight:700; border-radius:50%; }
+  #aboutBackdrop{
+    position:fixed; inset:0; background:rgba(5,9,10,0.72); z-index:40;
+  }
+  #aboutPanel{
+    position:fixed; z-index:41; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:min(560px, 92vw); max-height:86vh; display:flex; flex-direction:column;
+    background:var(--medium); border:1px solid var(--rule); border-radius:3px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.5);
+  }
+  .aboutHead{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 14px; border-bottom:1px solid var(--rule); flex:none;
+  }
+  .aboutHead h2{ margin:0; font-size:13px; letter-spacing:.1em; text-transform:uppercase; }
+  #btnAboutClose{
+    min-height:0; padding:2px 9px; font-size:16px; line-height:1; border-radius:2px;
+  }
+  .aboutBody{ padding:6px 16px 16px; overflow-y:auto; font-size:12.5px; line-height:1.55; }
+  .aboutBody h3{
+    font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--sense);
+    margin:16px 0 6px;
+  }
+  .aboutBody p{ margin:8px 0; }
+  .aboutBody ul{ margin:6px 0; padding-left:18px; }
+  .aboutBody li{ margin:6px 0; }
+  .aboutBody b{ color:var(--chalk); }
+
+  .chLine{ padding:9px 0; border-bottom:1px solid var(--rule); }
+  .chLine:last-child{ border-bottom:none; }
+  .chHead{ display:flex; align-items:baseline; gap:8px; margin-bottom:3px; }
+  .chDate{ font-size:10px; color:var(--chalk-dim); font-variant-numeric:tabular-nums; }
+  .chTag{
+    font-size:9px; letter-spacing:.08em; text-transform:uppercase; padding:1px 5px;
+    border:1px solid var(--rule); border-radius:2px; color:var(--chalk-dim);
+  }
+  .chTitle{ font-weight:700; font-size:12px; }
+  .chText{ color:var(--chalk-dim); font-size:11.5px; line-height:1.5; }
   .spsub{ display:block; color:var(--chalk-dim); font-size:10px; letter-spacing:.02em; margin-top:1px; }
 
   #extinct{
@@ -119,6 +159,7 @@
   <span class="sub">natural-selection instrument</span>
   <span class="spacer"></span>
   <span class="ver" id="verTag"></span>
+  <button id="btnAbout" class="chip" aria-haspopup="dialog" aria-controls="aboutPanel" title="What am I looking at?">?</button>
 </header>
 
 <main>
@@ -200,6 +241,84 @@
 </main>
 
 <p class="foot">Space runs and pauses &middot; R resets &middot; same seed always reproduces the same run</p>
+
+<div id="aboutBackdrop" hidden></div>
+<div id="aboutPanel" role="dialog" aria-modal="true" aria-labelledby="aboutTitle" hidden>
+  <div class="aboutHead">
+    <h2 id="aboutTitle">What am I looking at?</h2>
+    <button id="btnAboutClose" aria-label="Close">&times;</button>
+  </div>
+  <div class="aboutBody">
+
+    <p>A natural-selection simulator. Organisms forage, spend energy, reproduce, and
+    die. Nobody designs the outcome &mdash; the environment selects it.</p>
+
+    <h3>Reading the screen</h3>
+    <ul>
+      <li><b>Specimen well</b> (top) &mdash; organisms as coloured dots. Colour is
+      emergent species (clade), largest population first. Species are not designed
+      in; they're derived from who can still interbreed.</li>
+      <li><b>Census strip</b> &mdash; population by species over time. A new coloured
+      band appearing is a speciation event happening live.</li>
+      <li><b>Drift ribbon</b> &mdash; each trait's distribution across the
+      population, sliding through generations. A bright core migrating up or down a
+      band <i>is</i> natural selection, made visible.</li>
+    </ul>
+
+    <h3>The traits</h3>
+    <p>Four heritable traits. Three are priced by real biology, not numbers picked
+    to feel balanced:</p>
+    <ul>
+      <li><b>Speed</b> &mdash; costs mass &times; speed&sup2; (kinetic)</li>
+      <li><b>Size</b> &mdash; costs mass<sup>0.75</sup>, Kleiber's law: real
+      metabolic scaling, observed across ~27 orders of magnitude of body mass</li>
+      <li><b>Sense</b> &mdash; costs sense&sup2;; wide vision is neurally expensive
+      tissue</li>
+      <li><b>Diet</b> &mdash; which of two resources an organism digests; no
+      metabolic cost, the price is opportunity, what it can't eat</li>
+    </ul>
+
+    <h3>How evolution happens here</h3>
+    <p>Reproduction is sexual: two parents, real per-trait recombination (not a
+    blend of the two &mdash; blending would erase the variance selection needs).
+    Mutation adds small random changes on top. Nothing copies perfectly.</p>
+    <p>Species aren't chosen. Two organisms are the same species if they could still
+    interbreed &mdash; close enough in trait space, and able to physically find each
+    other. When a lineage drifts far enough &mdash; by diet, by geography, or
+    sometimes just by chance &mdash; gene flow stops and a new species exists,
+    detected the moment it happens, not scripted in advance.</p>
+
+    <h3>Pressures worth trying</h3>
+    <ul>
+      <li><b>Plains vs Oasis</b> &mdash; same total food, different distribution.
+      Plains rewards speed; Oasis rewards sense.</li>
+      <li><b>Monoculture vs Oasis</b> &mdash; identical except resource count. One
+      resource: exclusion, a single species wins. Two: coexistence, specialists
+      partition the two resources between them.</li>
+      <li><b>Archipelago</b> &mdash; two resource clusters, an empty gap between
+      them. Distance alone ends gene flow, no dietary preference required. Watch the
+      census strip: two bands that stay geographically separated rather than
+      intermixed &mdash; the signature of a different speciation mechanism than
+      Oasis's.</li>
+      <li><b>Seasonal</b> &mdash; food oscillates. Watch population peak heading
+      into the lean phase, then crash &mdash; a reproductive-lag effect, not a
+      direct response to abundance.</li>
+      <li><b>Events panel</b> &mdash; trigger a drought, a bloom, or an instant
+      die-off and watch the ribbon and census respond.</li>
+    </ul>
+
+    <h3>What's real</h3>
+    <p>Every random draw is seeded. The same seed reproduces a run exactly. Where a
+    hypothesis didn't pan out, the changelog below says so rather than dressing it
+    up &mdash; a fluctuating-selection effect on traits was expected from seasons and
+    didn't show up cleanly; the boom-bust population cycle that <i>did</i> show up
+    wasn't the one predicted going in.</p>
+
+    <h3>Changelog</h3>
+    <div id="changelog"></div>
+
+  </div>
+</div>
 
 <script>
 /*__BUNDLE__*/

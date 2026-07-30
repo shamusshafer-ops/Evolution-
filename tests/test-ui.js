@@ -67,5 +67,32 @@ check('the banner clears once the shock expires', els.shockActive.hidden === tru
 check('buttons re-enable once the shock expires',
       els.shocks.children.every(b => b.disabled === false));
 
+/* --- About panel: opens, closes, renders the changelog exactly once, and never
+   touches simulation state (it's an explainer, not a pause) --- */
+els.aboutPanel = { hidden:true };
+els.aboutBackdrop = { hidden:true };
+els.changelog = { innerHTML:'', dataset:{} };
+
+initWorld({seed:'about', scenario:'temperate'});
+setRunning(true);
+const runningBefore = state.running;
+
+openAbout();
+check('opening About shows the panel', els.aboutPanel.hidden === false);
+check('opening About shows the backdrop', els.aboutBackdrop.hidden === false);
+check('opening About does not pause the sim', state.running === runningBefore);
+check('the changelog renders every entry', (els.changelog.innerHTML.match(/chLine/g)||[]).length === CHANGELOG.length);
+check('every changelog entry has a date, tag, and title present in the rendered html',
+      CHANGELOG.every(c => els.changelog.innerHTML.includes(c.date) && els.changelog.innerHTML.includes(c.tag) && els.changelog.innerHTML.includes(c.title)));
+
+const htmlAfterFirstRender = els.changelog.innerHTML;
+openAbout();   // opening again must not rebuild/duplicate the list
+check('re-opening does not re-render (no duplicate entries)', els.changelog.innerHTML === htmlAfterFirstRender);
+
+closeAbout();
+check('closing hides the panel', els.aboutPanel.hidden === true);
+check('closing hides the backdrop', els.aboutBackdrop.hidden === true);
+check('closing does not affect the sim run state', state.running === runningBefore);
+
 console.log(`\n${pass}/${pass+fail} checks passed`);
 if(fail) process.exit(1);

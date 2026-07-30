@@ -158,6 +158,44 @@ function restart(opts){
   drawAll();
 }
 
+/* About panel: a dialog over the running sim, not a navigation. It never touches
+   `state` or pauses the run — closing it should hand the player back to exactly
+   where they were, since the whole point is to explain what they're already
+   watching, not interrupt it. */
+function renderChangelog(){
+  const host = $('changelog');
+  if (!host || host.dataset.built) return;   // build once; the list never changes at runtime
+  host.dataset.built = '1';
+  let html = '';
+  for (const c of CHANGELOG){
+    html += `<div class="chLine"><div class="chHead">` +
+      `<span class="chDate">${c.date}</span><span class="chTag">${c.tag}</span>` +
+      `<span class="chTitle">${c.title}</span></div>` +
+      `<div class="chText">${c.text}</div></div>`;
+  }
+  host.innerHTML = html;
+}
+function openAbout(){
+  renderChangelog();
+  const p = $('aboutPanel'), b = $('aboutBackdrop');
+  if (p) p.hidden = false;
+  if (b) b.hidden = false;
+}
+function closeAbout(){
+  const p = $('aboutPanel'), b = $('aboutBackdrop');
+  if (p) p.hidden = true;
+  if (b) b.hidden = true;
+}
+function bindAbout(){
+  const btn = $('btnAbout'), close = $('btnAboutClose'), backdrop = $('aboutBackdrop');
+  if (btn) btn.onclick = openAbout;
+  if (close) close.onclick = closeAbout;
+  if (backdrop) backdrop.onclick = closeAbout;
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape'){ const p = $('aboutPanel'); if (p && !p.hidden) closeAbout(); }
+  });
+}
+
 function bindUI(){
   UI.els.run = $('btnRun');
   if (UI.els.run) UI.els.run.onclick = () => setRunning(!state.running);

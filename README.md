@@ -6,6 +6,10 @@ the environment does.
 
 Open `index.html`. No build step needed to play; no dependencies, no network.
 
+Tap the **?** button for an in-app explainer (how to read the three views, what each
+trait costs and why, which scenarios to try) and a live changelog of every change
+that's altered what the sim does.
+
 ## The model
 
 Three heritable traits, each with a real metabolic price:
