@@ -14,6 +14,8 @@ const VERSION = '0.1.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-07-30', tag:'M6', title:'Adaptations — armour, venom, nocturnality',
+    text:'Discrete on/off genes, in contrast to the continuous traits. Each must earn its keep: armour blocks predators but costs upkeep scaling with body surface area, venom lets a small organism hunt anything but costs upkeep, nocturnality has no upkeep but you see worse in the dark. Armour goes from 0.00-0.04 where nothing hunts to 0.99-1.00 where predators exist — the real freshwater-stickleback armour-loss story. Nocturnality does something different again: whichever phase is rarer does better, so it settles at a stable mix (~0.42) no matter where it starts. That is a genuinely different way of keeping diversity alive than the predation bistability in M5. Species are now named rather than numbered, and each clade shows its adaptations as symbols.' },
   { date:'2026-07-30', tag:'M5', title:'Predation — and two stable states',
     text:'Large organisms can now eat smaller ones (Predation scenario only, so every earlier result stays valid). This finally makes size worth its cost: mean size 0.67 without predation vs 1.80 with, against a difference of ~0.03 before. The predicted outcome — small and large coexisting in one population — did NOT happen. What happened instead is more interesting: two alternative stable states. Start small and you stay small, hiding below the size predators bother hunting, at ~5x the population. Start large and you climb to ~2.0 and stay there, safe by being big. The middle is uninhabitable — big enough to hunt, too small to fight back. At a starting size of 0.75 the same run lands in either state depending on the seed.' },
   { date:'2026-07-30', tag:'M4', title:'Shocks, seasons, migration',
@@ -272,6 +274,83 @@ const PREDATION = {
   minPreySize: 0.62,  // prey below this are not worth hunting
 };
 
+/* ---------- Adaptations ----------
+   Discrete, binary, heritable genes — present or absent, never partial. This is a
+   deliberate contrast with TRAITS, which are continuous.
+
+   The reason is legibility, and it is the whole point of this system: a continuous
+   trait mean drifting from 31.6 to 35.8 is invisible to anyone watching. "The eastern
+   clade evolved venom" is a story. Discrete presence/absence is what makes an
+   evolutionary outcome tellable, and real biology is full of them — the classic case
+   being freshwater stickleback losing their armour plates (Pitx1) because armour is
+   costly and the predator regime changed. Armour below is modelled on exactly that.
+
+   Every adaptation MUST have a real cost and a CONDITIONAL benefit. An adaptation
+   that is always worth having is not an adaptation, it is a free upgrade: everything
+   evolves it, the polymorphism collapses, and nothing interesting is visible. Each
+   one below is deliberately useless-to-harmful in some environments.
+
+   Inheritance matches how traits work: the child takes each gene from one parent at
+   random (unlinked loci), with a small independent chance to flip. No dominance —
+   adding diploidy would be more realistic but buys little here and costs a lot of
+   clarity. */
+const ADAPTATIONS = [
+  {
+    key:'armor', name:'Armour', short:'ARM', color:'#9BB4C4', glyph:'▣',
+    /* Cost scales with SURFACE AREA, not volume — armour covers the outside of a
+       body, so it scales as mass^(2/3), not mass^1. A real detail that matters here:
+       it means armour is proportionally cheaper for large organisms, which is the
+       opposite of how the basal metabolic cost behaves, and gives large-and-armoured
+       a genuinely different economics from small-and-armoured. */
+    costCoef: 0.030, costExp: 0.667,
+    blurb:'Cannot be eaten by predators. Costs upkeep scaling with body surface area. Worthless where nothing hunts you — and that is the point: armour is lost, not just gained.'
+  },
+  {
+    key:'venom', name:'Venom', short:'VEN', color:'#C88BE0', glyph:'✳',
+    /* Flat cost: venom glands do not scale strongly with body size. Inverts the
+       predation size rule, so a small venomous organism can take large prey — which
+       is the only route into the predator niche that does not require paying the
+       metabolic cost of a large body. */
+    costCoef: 0.018, costExp: 0,
+    blurb:'Can prey on organisms of any size, ignoring the usual size requirement. Flat upkeep. Useless where predation is off.'
+  },
+  {
+    key:'nocturnal', name:'Nocturnal', short:'NOC', color:'#6C7BE0', glyph:'☾',
+    /* No metabolic cost at all — the cost is a SENSE PENALTY while foraging, because
+       it is dark. The benefit is temporal niche partitioning: a nocturnal organism
+       forages while diurnal ones do not, so it competes with far fewer rivals.
+
+       This should produce NEGATIVE FREQUENCY-DEPENDENT SELECTION: the rarer phase is
+       the better one to be in, because it has the food to itself. Frequency-dependent
+       selection is the classic mechanism for MAINTAINING a polymorphism — which, if
+       it works, is the stable coexistence that predation failed to produce in M5
+       (that gave bistability instead: two states, but only ever one at a time). */
+    costCoef: 0, costExp: 0, senseMul: 0.62,
+    blurb:'Forages at night, competing only with other nocturnals. Sees less well in the dark. Being the rare phase is the advantage, so this should hold a stable mix rather than take over.'
+  },
+];
+const ADAPT_KEYS = ADAPTATIONS.map(a => a.key);
+const ADAPT_BY_KEY = {};
+for (const a of ADAPTATIONS) ADAPT_BY_KEY[a.key] = a;
+
+/* Chance per gene, per birth, of flipping state. Deliberately far lower than trait
+   mutation (0.90): a discrete gene appearing or vanishing is a much larger event
+   than a continuous trait nudging by a fraction of a standard deviation, and at high
+   rates the genes just churn instead of being inherited long enough to be selected.
+   Tuned down from 0.020 after measurement: because the flip is bidirectional, a high
+   rate pushes every gene toward 50% regardless of fitness. At 0.020 armour sat at
+   0.27-0.49 even in scenarios with NO predators, where it is pure dead weight —
+   mutation pressure was drowning selection and destroying the conditional-benefit
+   contrast the whole system exists to show. */
+const ADAPT_MUTATE = 0.006;
+
+/* ---------- Day / night ----------
+   Short cycle relative to a generation (~185 ticks), so an organism experiences many
+   day/night transitions in its life and the nocturnal gene is a strategy rather than
+   a lottery ticket on birth timing. */
+const DAYNIGHT = { period: 90 };
+function isNight(tick){ return (tick % DAYNIGHT.period) >= (DAYNIGHT.period / 2); }
+
 /* ---------- Founding population ----------
    ONE ancestral population, not a set of predeclared species.
 
@@ -295,6 +374,15 @@ const FOUNDER = {
 
 /* Palette for emergent clades, largest-first. Deliberately more entries than a run is
    likely to need; runs that exceed it wrap and are reported as such. */
+/* Clades get names rather than numbers. "Clade 3" is a row in a table; "Ash" is
+   something you follow across a run and tell someone about afterwards. Cheap, and it
+   is most of the difference between watching data and watching a story. */
+const CLADE_NAMES = [
+  'Ash','Brine','Cinder','Drift','Ember','Fen','Gale','Hollow',
+  'Iron','Jet','Kelp','Loam','Moss','North','Ochre','Pale',
+];
+function cladeName(k){ return CLADE_NAMES[k % CLADE_NAMES.length] + (k >= CLADE_NAMES.length ? ' II' : ''); }
+
 const CLADE_COLORS = [
   '#4EA8DE', '#E0607E', '#E8B04B', '#6FD3A2',
   '#B48EE0', '#E8734B', '#5FD0D8', '#C2A45E',
@@ -345,6 +433,16 @@ const SCENARIOS = [
      controlled twin: run it against Temperate and every difference is predation,
      not food, geography, or season. Predation is OFF in every other scenario so
      that all M1-M4 measurements remain valid. */
+  /* Adaptations live behind their own flag, same reasoning as predation: day/night
+     foraging alone would halve every organism's feeding time and invalidate M1-M5.
+     Nocturne isolates the nocturnal gene (no predation, so armour and venom are dead
+     weight and should stay rare); Wild turns everything on at once. */
+  { id:'nocturne',  name:'Nocturne',   blurb:'Temperate, plus a day/night cycle and discrete adaptations. Nocturnal foragers compete only with each other — being the rare phase is the advantage.',
+    patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34, adaptations:true, dayNight:true } },
+
+  { id:'wild',      name:'Wild',       blurb:'Everything at once: predators, day and night, and all three adaptations in play. Armour, venom and nocturnality each pay off only under the right conditions.',
+    patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34, predation:true, adaptations:true, dayNight:true } },
+
   { id:'predation', name:'Predation',  blurb:'Same food as Temperate, but large organisms can eat smaller ones. Size finally buys something proportional to what it costs.',
     patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34, predation:true } },
 ];

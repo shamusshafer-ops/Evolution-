@@ -64,6 +64,74 @@ globally would have silently invalidated every M1-M4 measurement and the tests
 pinning them. `test-predation.js` explicitly asserts predation is OFF in temperate,
 oasis, and archipelago, and that zero predation events occur when the flag is off.
 
+## Status
+
+**M6 shipped (2026-07-30).** Discrete adaptations, day/night, clade names. 194 tests.
+
+### Why discrete, not more continuous traits
+
+A trait mean drifting from 31.6 to 35.8 is invisible to anyone watching. "The eastern
+clade evolved venom" is a story. Discrete presence/absence is what makes an
+evolutionary outcome tellable, and it is why adaptations were built before the
+additional continuous traits that were also on the list.
+
+Three genes, each with a real cost and — critically — a CONDITIONAL benefit. An
+adaptation that always pays is a free upgrade: everything evolves it, no polymorphism
+survives, nothing is visible.
+
+| gene | cost | benefit | useless when |
+|---|---|---|---|
+| Armour | upkeep scaling as mass^(2/3), i.e. surface area, because armour covers the outside | cannot be eaten | nothing hunts you |
+| Venom | flat upkeep (glands do not scale) | prey on any size, ignoring the size rule | predation is off |
+| Nocturnal | none — the cost is a sense penalty in the dark | forages at night, competing with far fewer rivals | you are the common phase |
+
+### Measured: armour is conditional, exactly as designed
+
+| | armour frequency |
+|---|---|
+| Nocturne (no predators) | **0.00 - 0.04** |
+| Wild (predators) | **0.99 - 1.00** |
+
+Absent to universal, decided purely by whether predators exist. This is the
+freshwater-stickleback armour-loss pattern (Pitx1), and the clearest possible
+demonstration that these are adaptations and not upgrades.
+
+### Measured: frequency dependence — a SECOND way to maintain diversity
+
+M5's predation produced BISTABILITY: where a run starts decides where it ends, and
+only one state exists at a time. Nocturnality does the opposite, because the rarer
+phase has the night to itself:
+
+| starting frequency | after 25,000 ticks |
+|---|---|
+| 0.05 | **0.37, 0.43** (rises) |
+| 0.95 | **0.45, 0.46** (falls) |
+
+Both converge on ~0.42 regardless of start. Negative frequency-dependent selection is
+the classic mechanism for MAINTAINING a polymorphism, and it is precisely the stable
+coexistence that predation failed to produce. The sim can now demonstrate both
+mechanisms side by side and show that they behave differently.
+
+### Two tuning findings
+
+`ADAPT_MUTATE` began at 0.020 and armour sat at 0.27-0.49 even with no predators at
+all. Because the flip is bidirectional, a high rate drags every gene toward 50%
+regardless of fitness — mutation pressure was drowning selection and destroying the
+conditional-benefit contrast. Lowered to 0.006, which produced the clean 0.00 vs 1.00
+split above.
+
+Day/night is gated behind `cfg.dayNight`, and adaptations behind `cfg.adaptations`,
+for the same reason predation is gated: switching the cycle on globally would halve
+every organism's foraging time in every scenario and silently invalidate M1-M5.
+`test-adaptations.js` asserts both are OFF in temperate, oasis, archipelago and
+predation, and that foraging is unaffected by tick when the cycle is off.
+
+### Also: clades are named
+
+"Clade 3" is a row in a table. "Ash" is something you follow across a run. Each clade
+also shows its adaptations as glyphs, dimmed while spreading and solid once fixed, so
+a clade's strategy reads at a glance instead of as four decimal numbers.
+
 ## Standing practice — in-app changelog
 
 Every future change that alters what the sim DOES gets a `CHANGELOG` entry in

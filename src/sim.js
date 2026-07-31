@@ -86,7 +86,43 @@ function metabolicCost(o){
   const basal  = METAB.basalCoef  * Math.pow(m, METAB.basalExp);
   const travel = METAB.travelCoef * m * o.speed * o.speed;
   const vision = METAB.visionCoef * o.sense * o.sense;
-  return basal + travel + vision;
+  return basal + travel + vision + adaptationCost(o);
+}
+
+/* Upkeep for every adaptation an organism carries. Each has its own scaling exponent
+   against body mass — armour scales with surface area (2/3) because it covers the
+   outside of the body, venom is flat because glands do not scale strongly. costExp 0
+   means a flat cost independent of size. */
+function adaptationCost(o){
+  let c = 0;
+  for (const a of ADAPTATIONS){
+    if (!o.ad || !o.ad[a.key] || !a.costCoef) continue;
+    c += a.costExp ? a.costCoef * Math.pow(massOf(o), a.costExp) : a.costCoef;
+  }
+  return c;
+}
+
+/* Sense is degraded at night for a nocturnal forager — it is dark. This is the cost
+   that pays for temporal niche partitioning; without it, being nocturnal would be
+   free and every organism would take it. */
+function effectiveSense(o){
+  if (state.cfg.dayNight && o.ad && o.ad.nocturnal && isNight(state.tick)){
+    return o.sense * ADAPT_BY_KEY.nocturnal.senseMul;
+  }
+  return o.sense;
+}
+
+/* Is this organism foraging right now? Nocturnal organisms feed at night, everything
+   else by day. Halving available foraging time is the direct cost; competing with
+   only the other half of the population is the benefit, and which of those dominates
+   depends on how many others share your phase — the frequency dependence. */
+function isForaging(o){
+  // Gated per-scenario for the same reason predation is: switching day/night on
+  // globally would halve every organism's foraging time in every scenario and
+  // silently invalidate every M1-M5 measurement and the tests pinning them.
+  if (!state.cfg.dayNight) return true;
+  const night = isNight(state.tick);
+  return (o.ad && o.ad.nocturnal) ? night : !night;
 }
 
 /* How well this organism extracts energy from a resource of the given type.
@@ -99,11 +135,12 @@ function dietEfficiency(o, type){
   return Math.max(DIET.floor, eff);
 }
 
-function makeOrganism(x, y, traits, gen){
+function makeOrganism(x, y, traits, gen, adapt){
   const o = {
     id: state.nextId++,
     clade: 0,
     predCooldown: 0,
+    ad: {},              // discrete adaptation genes; see ADAPTATIONS in data.js
     x, y,
     dir: rnd() * Math.PI * 2,
     gen: gen || 1,
@@ -115,6 +152,10 @@ function makeOrganism(x, y, traits, gen){
   for (const t of TRAITS){
     o[t.key] = clamp(traits && traits[t.key] != null ? traits[t.key] : t.init, t.min, t.max);
   }
+  // Adaptation genes. Founders start WITHOUT any of them: an adaptation that is
+  // present from tick zero cannot be observed arising, and watching one appear and
+  // spread is the entire point of making them discrete.
+  for (const k of ADAPT_KEYS) o.ad[k] = !!(adapt && adapt[k]);
   o.energy = LIFE.startEnergy * Math.sqrt(massOf(o));
   return o;
 }
@@ -244,11 +285,12 @@ function wrapDelta(d, span){
 
 function findFood(o, fg){
   const cfg = state.cfg;
-  const reach = Math.ceil(o.sense / fg.cell);
+  const sense = effectiveSense(o);
+  const reach = Math.ceil(sense / fg.cell);
   const cx = clamp(Math.floor(o.x / fg.cell), 0, fg.cols-1);
   const cy = clamp(Math.floor(o.y / fg.cell), 0, fg.rows-1);
   let best = -1, bestScore = 0;
-  const senseR2 = o.sense * o.sense;
+  const senseR2 = sense * sense;
   for (let gy = cy-reach; gy <= cy+reach; gy++){
     for (let gx = cx-reach; gx <= cx+reach; gx++){
       let ax = gx, ay = gy;
@@ -308,6 +350,18 @@ function reproduceSexual(a, b){
     if (rnd() < LIFE.mutateChance) v += rndNorm() * t.sigma;
     childTraits[t.key] = clamp(v, t.min, t.max);
   }
+  // Adaptation genes: one parent's allele per gene, unlinked, with a small
+  // independent flip chance. Far lower than trait mutation because a discrete gene
+  // appearing or vanishing is a much bigger event than a continuous nudge.
+  const childAdapt = {};
+  if (state.cfg.adaptations){
+    for (const k of ADAPT_KEYS){
+      let v = (rnd() < 0.5) ? !!a.ad[k] : !!b.ad[k];
+      if (rnd() < ADAPT_MUTATE) v = !v;
+      childAdapt[k] = v;
+    }
+  }
+
   // Both parents pay. This is the twofold cost of sex made literal: two adults are
   // consumed to make one offspring where budding made one from one, which is why the
   // energy economy needed retuning when this landed.
@@ -315,7 +369,7 @@ function reproduceSexual(a, b){
   const giveB = b.energy * LIFE.reproduceCost;
   a.energy -= giveA;
   b.energy -= giveB;
-  const child = makeOrganism(a.x, a.y, childTraits, Math.max(a.gen, b.gen) + 1);
+  const child = makeOrganism(a.x, a.y, childTraits, Math.max(a.gen, b.gen) + 1, childAdapt);
   child.energy = giveA + giveB;
   child.dir = rnd() * Math.PI * 2;
   state.organisms.push(child);
@@ -392,8 +446,12 @@ function step(){
     o.age++;
     if (o.predCooldown > 0) o.predCooldown--;
 
-    /* --- seek --- */
-    const fi = findFood(o, fg);
+    /* --- seek ---
+       Off-phase organisms do not forage: a nocturnal one rests through the day and a
+       diurnal one through the night. This is what splits the population's competition
+       in two and makes the nocturnal gene frequency-dependent rather than simply
+       better or worse. */
+    const fi = isForaging(o) ? findFood(o, fg) : -1;
     if (fi >= 0 && !eatenFood.has(fi)){
       const f = state.food[fi];
       o.dir = Math.atan2(wrapDelta(f.y - o.y, cfg.h), wrapDelta(f.x - o.x, cfg.w));
@@ -551,8 +609,14 @@ function predationPass(){
         for (const j of bucket){
           if (j === i || eaten[j]) continue;
           const prey = pop[j];
-          // Size gate: predators are meaningfully larger, not marginally.
-          if (pred.size < prey.size * PREDATION.sizeRatio) continue;
+          // Armour: cannot be eaten at all. The single clearest conditional benefit
+          // in the model — decisive where predation exists, dead weight where it
+          // does not, which is exactly the stickleback armour-loss story.
+          if (prey.ad && prey.ad.armor) continue;
+          // Size gate: predators are meaningfully larger, not marginally — UNLESS the
+          // predator is venomous, which is the whole point of venom: it buys entry to
+          // the predator niche without paying for a large body.
+          if (!(pred.ad && pred.ad.venom) && pred.size < prey.size * PREDATION.sizeRatio) continue;
           // Profitability gate (optimal foraging): very small prey are not worth
           // the handling cost. This is the size refuge — see PREDATION.minPreySize.
           if (prey.size < PREDATION.minPreySize) continue;
@@ -728,6 +792,26 @@ function computeSpecies(){
 function viableSpeciesCount(minSize){
   minSize = minSize || 5;
   return (state.clades || []).filter(c => c.n >= minSize).length;
+}
+
+/* Population-wide frequency of an adaptation, in [0,1]. The number to watch: an
+   adaptation stuck near 0 is not paying for itself, one at 1.0 has swept and is no
+   longer interesting, and one holding steady in between is being MAINTAINED by
+   something — which is the outcome worth having. */
+function adaptFrequency(key){
+  const pop = state.organisms;
+  if (!pop.length) return 0;
+  let n = 0;
+  for (const o of pop) if (o.ad && o.ad[key]) n++;
+  return n / pop.length;
+}
+function cladeAdaptFrequency(cid, key){
+  let n = 0, tot = 0;
+  for (const o of state.organisms){
+    if (o.clade !== cid) continue;
+    tot++; if (o.ad && o.ad[key]) n++;
+  }
+  return tot ? n/tot : 0;
 }
 
 /* ---------- Per-clade statistics ----------

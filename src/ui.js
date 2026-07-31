@@ -51,13 +51,30 @@ function paintSpecies(){
   if (nEl) nEl.textContent = clades.length;
 
   if (!clades.length){ host.innerHTML = '<div class="spsub">no viable species</div>'; return; }
+  const showAdapt = !!state.cfg.adaptations;
   let html = '';
   for (const c of clades){
+    /* Adaptation glyphs are the legibility payoff of making these genes discrete:
+       a clade's strategy reads at a glance as a row of symbols rather than as four
+       decimal numbers. Only shown at >=50% within the clade — an adaptation drifting
+       at 10% is not that clade's identity, and showing it would make every clade look
+       the same. Dimmed between 50-85% to distinguish "spreading" from "fixed". */
+    let glyphs = '';
+    if (showAdapt){
+      for (const a of ADAPTATIONS){
+        const f = cladeAdaptFrequency(c.id, a.key);
+        if (f >= 0.5){
+          const solid = f >= 0.85;
+          glyphs += `<span class="adGlyph" style="color:${a.color};opacity:${solid?1:0.55}" title="${a.name} — ${Math.round(f*100)}% of this clade">${a.glyph}</span>`;
+        }
+      }
+    }
     html += '<div class="sprow">' +
       `<span class="dot" style="background:${cladeColor(c.id)}"></span>` +
-      `<span class="spname">Clade ${c.id + 1}` +
-        `<span class="spsub">spd ${c.traits.speed.toFixed(2)} \u00b7 sns ${c.traits.sense.toFixed(0)} \u00b7 diet ${c.traits.diet.toFixed(2)}</span>` +
+      `<span class="spname">${cladeName(c.id)}` +
+        `<span class="spsub">spd ${c.traits.speed.toFixed(2)} \u00b7 sns ${c.traits.sense.toFixed(0)} \u00b7 sz ${c.traits.size.toFixed(2)}</span>` +
       '</span>' +
+      `<span class="adGlyphs">${glyphs}</span>` +
       `<span class="spcount">${c.n}</span></div>`;
   }
   host.innerHTML = html;
