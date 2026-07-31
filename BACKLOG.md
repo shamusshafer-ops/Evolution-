@@ -26,6 +26,7 @@
 |23| Contest competition (the other half of #1) | Share contested food by size^2 instead of first-come. Cheaper than predation and a different mechanism for the same trait; worth comparing against predation's bistable outcome | S | Backlog |
 |24| Hysteresis test for the predation bistability | If a population in the large-bodied state is pushed small by a shock, does it stay small? True hysteresis would be a strong, teachable result | S | Backlog |
 |25| Discrete adaptations (armour, venom, nocturnal) | Legible evolutionary stories; conditional benefits | M | **Shipped 2026-07-30** |
-|26| Speciation as an EVENT (toast + flash + auto-name) | Owner-ranked #2. The biggest moment in the sim currently passes silently as a number changing in a corner | S | Next up |
+|26| Speciation as an EVENT (toast + flash + auto-name) | Owner-ranked #2 | S | **Shipped 2026-07-30** |
 |27| Fix scenario distinctness | Owner-ranked #3. Temperate/famine/glut land within ~6% of each other on every axis: 9 scenarios, ~3 distinct outcomes | M | Backlog |
 |28| Social/flocking adaptation | The fourth adaptation, deferred from M6 — needs neighbour queries, more expensive than the other three | M | Backlog |
+|29| Name the ACTUAL new clade, not the smallest one | Depends on #2 (lineage tracking). The M7 notification heuristic (smallest = newest) is honest about being approximate; this would make it exact | S | Backlog |

@@ -15,6 +15,8 @@ const VERSION = '0.1.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-07-30', tag:'M7', title:'Speciation notifications',
+    text:'A toast and a brief pulse on the specimen well when a new species emerges, naming it (clade names landed in M6). Fires on genuine peaks in species count, not on every sample where the count happens to be up from the last one — a clade wobbling near the viability threshold cannot trigger a duplicate notification for a split that already happened and was already announced. Non-intrusive by design: never pauses the sim, times by real seconds so it reads the same regardless of speed multiplier, and a Reset clears any notification still on screen from the old run.' },
   { date:'2026-07-30', tag:'M6', title:'Adaptations — armour, venom, nocturnality',
     text:'Discrete on/off genes, in contrast to the continuous traits. Each must earn its keep: armour blocks predators but costs upkeep scaling with body surface area, venom lets a small organism hunt anything but costs upkeep, nocturnality has no upkeep but you see worse in the dark. Armour goes from 0.00-0.04 where nothing hunts to 0.99-1.00 where predators exist — the real freshwater-stickleback armour-loss story. Nocturnality does something different again: whichever phase is rarer does better, so it settles at a stable mix (~0.42) no matter where it starts. That is a genuinely different way of keeping diversity alive than the predation bistability in M5. Species are now named rather than numbered, and each clade shows its adaptations as symbols.' },
   { date:'2026-07-30', tag:'M5', title:'Predation — and two stable states',
@@ -532,6 +534,8 @@ function makeState(opts){
     census: [],           // per-sample population by clade — where exclusion becomes visible
     clades: [],           // emergent species, recomputed in sampleHistory()
     activeShocks: [],     // shocks currently overlaying cfg, with restore snapshots
+    peakSpeciesSeen: 1,    // highest viable species count observed this run; drives notifications
+    events: [],            // queued notifications for the UI to drain (speciation, etc.)
     foodCarry: 0,
     running: false,
     speedMult: 1,
@@ -1365,6 +1369,40 @@ function sampleCensus(){
   const cen = { tick: state.tick, clades: (state.clades||[]).map(c=>c.n), nClades: viableSpeciesCount() };
   state.census.push(cen);
   if (state.census.length > 260) state.census.shift();
+  detectSpeciation();
+}
+
+/* ---------- Speciation notifications ----------
+   PEAK-tracking, not raw count: fires only when the viable species count exceeds the
+   highest count ever seen so far this run, not on every sample where it happens to
+   be higher than the immediately preceding one. A clade can wobble across the n>=5
+   viability threshold near a boundary — count 2, then 1, then 2 again — and without
+   peak-tracking that wobble would fire a second "new species" notification for a
+   split that already happened and was already announced.
+
+   WHICH clade to name is a heuristic, not a certainty, and is worth being honest
+   about: this model has no persistent lineage identity (that is backlog #2/#18 —
+   clade ids are re-derived by population rank every sample, so "clade 0" can be a
+   different lineage from one sample to the next). The heuristic used here — the
+   smallest of the currently-viable clades is probably the one that just split off,
+   since a freshly diverged lineage has had the least time to grow — is reasonable
+   but not rigorous. Good enough for a toast; not good enough to build a real
+   lineage feature on. */
+function detectSpeciation(){
+  const n = viableSpeciesCount();
+  if (n > state.peakSpeciesSeen){
+    state.peakSpeciesSeen = n;
+    const viable = (state.clades||[]).filter(c => c.n >= 5).sort((a,b) => a.n - b.n);
+    const newest = viable[0];
+    state.events.push({
+      type: 'speciation',
+      tick: state.tick,
+      name: newest ? cladeName(newest.id) : null,
+      n: newest ? newest.n : null,
+      totalSpecies: n,
+    });
+    if (state.events.length > 20) state.events.shift();   // cap: an unattended long run should not grow this without bound
+  }
 }
 
 function extinct(){ return state.organisms.length === 0; }
@@ -1716,6 +1754,41 @@ function paintShocks(){
 
 function fmt(n, d){ return (n==null||!isFinite(n)) ? '—' : n.toFixed(d==null?2:d); }
 
+/* Drains state.events (populated by detectSpeciation() in sim.js) each paint. The
+   sim only KNOWS an event happened; it has no DOM and shouldn't — this is where that
+   fact becomes something the player sees. Toasts are real wall-clock timed (CSS
+   animation with a fixed duration), not tied to sim ticks, so they read at the same
+   pace regardless of the speed multiplier — a notification that vanished in one
+   frame at 20x speed would defeat the point of having one. */
+function drainEvents(){
+  if (!state || !state.events || !state.events.length) return;
+  const events = state.events; state.events = [];
+  for (const ev of events){
+    if (ev.type === 'speciation') showSpeciationToast(ev);
+  }
+}
+function showSpeciationToast(ev){
+  const host = $('toasts');
+  if (host){
+    const el = document.createElement('div');
+    el.className = 'toast';
+    const label = ev.name ? `<b>${ev.name}</b> has emerged` : 'A new species has emerged';
+    el.innerHTML = `${label} — ${ev.totalSpecies} species now, ${ev.n} organisms.`;
+    host.appendChild(el);
+    // Remove after the CSS animation finishes rather than relying on the animation's
+    // own visual end state — an element left in the DOM after fading out would still
+    // occupy layout space and silently accumulate over a long unattended run.
+    setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 5100);
+  }
+  const flash = $('wellFlash');
+  if (flash){
+    flash.classList.remove('pulse');
+    void flash.offsetWidth;   // force reflow so re-adding the class restarts the animation
+                              // if a second split happens before the first pulse finishes
+    flash.classList.add('pulse');
+  }
+}
+
 function paintReadouts(){
   if (!state) return;
   const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
@@ -1758,6 +1831,8 @@ function restart(opts){
   const scenario = opts.scenario || state.scenario;
   const wasRunning = state ? state.running : true;
   initWorld({ seed, scenario });
+  const toastHost = $('toasts');
+  if (toastHost) toastHost.innerHTML = '';   // a toast from the old run mid-animation would otherwise linger, naming a species that no longer exists
   if ($('seed')) $('seed').value = seed;
   fitCanvases();
   buildScenarioButtons();
@@ -1855,6 +1930,7 @@ function frame(){
   }
   drawAll();
   paintReadouts();
+  drainEvents();
   requestAnimationFrame(frame);
 }
 

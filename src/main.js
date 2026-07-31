@@ -11,6 +11,7 @@ function frame(){
   }
   drawAll();
   paintReadouts();
+  drainEvents();
   requestAnimationFrame(frame);
 }
 

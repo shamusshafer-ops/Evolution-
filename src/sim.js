@@ -63,6 +63,8 @@ function makeState(opts){
     census: [],           // per-sample population by clade — where exclusion becomes visible
     clades: [],           // emergent species, recomputed in sampleHistory()
     activeShocks: [],     // shocks currently overlaying cfg, with restore snapshots
+    peakSpeciesSeen: 1,    // highest viable species count observed this run; drives notifications
+    events: [],            // queued notifications for the UI to drain (speciation, etc.)
     foodCarry: 0,
     running: false,
     speedMult: 1,
@@ -896,6 +898,40 @@ function sampleCensus(){
   const cen = { tick: state.tick, clades: (state.clades||[]).map(c=>c.n), nClades: viableSpeciesCount() };
   state.census.push(cen);
   if (state.census.length > 260) state.census.shift();
+  detectSpeciation();
+}
+
+/* ---------- Speciation notifications ----------
+   PEAK-tracking, not raw count: fires only when the viable species count exceeds the
+   highest count ever seen so far this run, not on every sample where it happens to
+   be higher than the immediately preceding one. A clade can wobble across the n>=5
+   viability threshold near a boundary — count 2, then 1, then 2 again — and without
+   peak-tracking that wobble would fire a second "new species" notification for a
+   split that already happened and was already announced.
+
+   WHICH clade to name is a heuristic, not a certainty, and is worth being honest
+   about: this model has no persistent lineage identity (that is backlog #2/#18 —
+   clade ids are re-derived by population rank every sample, so "clade 0" can be a
+   different lineage from one sample to the next). The heuristic used here — the
+   smallest of the currently-viable clades is probably the one that just split off,
+   since a freshly diverged lineage has had the least time to grow — is reasonable
+   but not rigorous. Good enough for a toast; not good enough to build a real
+   lineage feature on. */
+function detectSpeciation(){
+  const n = viableSpeciesCount();
+  if (n > state.peakSpeciesSeen){
+    state.peakSpeciesSeen = n;
+    const viable = (state.clades||[]).filter(c => c.n >= 5).sort((a,b) => a.n - b.n);
+    const newest = viable[0];
+    state.events.push({
+      type: 'speciation',
+      tick: state.tick,
+      name: newest ? cladeName(newest.id) : null,
+      n: newest ? newest.n : null,
+      totalSpecies: n,
+    });
+    if (state.events.length > 20) state.events.shift();   // cap: an unattended long run should not grow this without bound
+  }
 }
 
 function extinct(){ return state.organisms.length === 0; }

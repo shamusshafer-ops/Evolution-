@@ -43,7 +43,10 @@ check('restart clears the auto-pause flag', UI.autoPaused === false);
 
 /* --- shock buttons: disabled while a patch-based shock is blocking, banner shows
    remaining time, and cull's button is never disabled since it never conflicts --- */
-els.shocks = { children: SHOCKS.map(sh => ({ textContent: sh.name, disabled: false })), innerHTML:'' };
+els.shocks = { children: SHOCKS.map(sh => ({ textContent: sh.name, disabled: false })),
+               appendChild(el){ this.children.push(el); },
+               get innerHTML(){ return this._html || ''; },
+               set innerHTML(v){ this._html = v; if (v === '') this.children = []; } };
 els.shockActive = { hidden:true, textContent:'' };
 initWorld({seed:'shockui', scenario:'temperate'});
 paintShocks();
@@ -123,6 +126,70 @@ if (typeof require !== 'undefined'){
     console.log('  (skipped CSS-source check: could not read src/shell.html from', process.cwd(), '—', e.message, ')');
   }
 }
+
+/* --- speciation notifications: peak-tracking, not raw count ---
+   Fires when the viable species count exceeds the highest ever seen this run, so a
+   clade wobbling across the n>=5 viability threshold cannot fire a duplicate
+   notification for a split that already happened. */
+els.toasts = { children: [], appendChild(el){ this.children.push(el); }, innerHTML:'' };
+els.wellFlash = { classList:{ _has:false, add(){ this._has=true; }, remove(){ this._has=false; } }, offsetWidth:0 };
+
+initWorld({seed:'evtA', scenario:'temperate'});
+check('peakSpeciesSeen starts at 1', state.peakSpeciesSeen === 1);
+check('events queue starts empty', state.events.length === 0);
+
+/* Directly exercise detectSpeciation() rather than running 15k+ ticks — the
+   MECHANISM is what these tests own; the empirical timing (median ~17k ticks) is
+   already pinned in test-speciation.js and doesn't need re-proving here. */
+state.clades = [{id:0, n:200}, {id:1, n:40}];   // simulate a fresh 2-species state
+detectSpeciation();
+check('a genuine increase fires exactly one event', state.events.length === 1);
+check('peakSpeciesSeen updates to the new count', state.peakSpeciesSeen === 2);
+check('the event names the SMALLER of the two clades (the split heuristic)',
+      state.events[0].name === cladeName(1));
+
+state.events = [];   // simulate the UI having drained it
+detectSpeciation();  // count is still 2 -- no new peak
+check('re-detecting at the same peak does not fire again', state.events.length === 0);
+
+// simulate a wobble: count dips to 1 then back to 2 -- must NOT re-fire
+state.clades = [{id:0, n:200}];
+detectSpeciation();
+check('a dip below peak does not fire (only INCREASES matter)', state.events.length === 0);
+state.clades = [{id:0, n:200}, {id:1, n:38}];
+detectSpeciation();
+check('returning to a previously-seen peak does not re-fire (this is the wobble guard)',
+      state.events.length === 0);
+
+// a genuine THIRD species must still fire
+state.clades = [{id:0, n:150}, {id:1, n:60}, {id:2, n:20}];
+detectSpeciation();
+check('a new peak beyond the previous one fires again', state.events.length === 1);
+check('peakSpeciesSeen tracks the new peak', state.peakSpeciesSeen === 3);
+
+/* --- UI drain: renders a toast per event, clears the queue, triggers the flash --- */
+state.events = [{ type:'speciation', tick:1000, name:'Ember', n:42, totalSpecies:2 }];
+drainEvents();
+check('drainEvents empties the queue', state.events.length === 0);
+check('drainEvents renders exactly one toast', els.toasts.children.length === 1);
+check('the toast text includes the species name', els.toasts.children[0].innerHTML.includes('Ember'));
+check('the flash pulse class is applied', els.wellFlash.classList._has === true);
+
+/* multiple queued events in one drain (e.g. two splits in the same census window)
+   must each get their own toast */
+els.toasts.children = [];
+state.events = [
+  { type:'speciation', tick:2000, name:'Fen', n:10, totalSpecies:3 },
+  { type:'speciation', tick:2000, name:'Gale', n:8, totalSpecies:4 },
+];
+drainEvents();
+check('multiple queued events each get their own toast', els.toasts.children.length === 2);
+
+/* --- restart clears stale toasts from the previous run --- */
+els.toasts.children = ['stale']; els.toasts.innerHTML = '<div>stale</div>';
+restart({ seed:'evtB' });
+check('restart clears any toast left over from the previous run', els.toasts.innerHTML === '');
+check('restart resets peakSpeciesSeen for the new run', state.peakSpeciesSeen === 1);
 
 console.log(`\n${pass}/${pass+fail} checks passed`);
 if(fail) process.exit(1);

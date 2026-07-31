@@ -14,6 +14,8 @@ const VERSION = '0.1.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-07-30', tag:'M7', title:'Speciation notifications',
+    text:'A toast and a brief pulse on the specimen well when a new species emerges, naming it (clade names landed in M6). Fires on genuine peaks in species count, not on every sample where the count happens to be up from the last one — a clade wobbling near the viability threshold cannot trigger a duplicate notification for a split that already happened and was already announced. Non-intrusive by design: never pauses the sim, times by real seconds so it reads the same regardless of speed multiplier, and a Reset clears any notification still on screen from the old run.' },
   { date:'2026-07-30', tag:'M6', title:'Adaptations — armour, venom, nocturnality',
     text:'Discrete on/off genes, in contrast to the continuous traits. Each must earn its keep: armour blocks predators but costs upkeep scaling with body surface area, venom lets a small organism hunt anything but costs upkeep, nocturnality has no upkeep but you see worse in the dark. Armour goes from 0.00-0.04 where nothing hunts to 0.99-1.00 where predators exist — the real freshwater-stickleback armour-loss story. Nocturnality does something different again: whichever phase is rarer does better, so it settles at a stable mix (~0.42) no matter where it starts. That is a genuinely different way of keeping diversity alive than the predation bistability in M5. Species are now named rather than numbered, and each clade shows its adaptations as symbols.' },
   { date:'2026-07-30', tag:'M5', title:'Predation — and two stable states',

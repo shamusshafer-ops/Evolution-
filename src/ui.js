@@ -123,6 +123,41 @@ function paintShocks(){
 
 function fmt(n, d){ return (n==null||!isFinite(n)) ? '—' : n.toFixed(d==null?2:d); }
 
+/* Drains state.events (populated by detectSpeciation() in sim.js) each paint. The
+   sim only KNOWS an event happened; it has no DOM and shouldn't — this is where that
+   fact becomes something the player sees. Toasts are real wall-clock timed (CSS
+   animation with a fixed duration), not tied to sim ticks, so they read at the same
+   pace regardless of the speed multiplier — a notification that vanished in one
+   frame at 20x speed would defeat the point of having one. */
+function drainEvents(){
+  if (!state || !state.events || !state.events.length) return;
+  const events = state.events; state.events = [];
+  for (const ev of events){
+    if (ev.type === 'speciation') showSpeciationToast(ev);
+  }
+}
+function showSpeciationToast(ev){
+  const host = $('toasts');
+  if (host){
+    const el = document.createElement('div');
+    el.className = 'toast';
+    const label = ev.name ? `<b>${ev.name}</b> has emerged` : 'A new species has emerged';
+    el.innerHTML = `${label} — ${ev.totalSpecies} species now, ${ev.n} organisms.`;
+    host.appendChild(el);
+    // Remove after the CSS animation finishes rather than relying on the animation's
+    // own visual end state — an element left in the DOM after fading out would still
+    // occupy layout space and silently accumulate over a long unattended run.
+    setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 5100);
+  }
+  const flash = $('wellFlash');
+  if (flash){
+    flash.classList.remove('pulse');
+    void flash.offsetWidth;   // force reflow so re-adding the class restarts the animation
+                              // if a second split happens before the first pulse finishes
+    flash.classList.add('pulse');
+  }
+}
+
 function paintReadouts(){
   if (!state) return;
   const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
@@ -165,6 +200,8 @@ function restart(opts){
   const scenario = opts.scenario || state.scenario;
   const wasRunning = state ? state.running : true;
   initWorld({ seed, scenario });
+  const toastHost = $('toasts');
+  if (toastHost) toastHost.innerHTML = '';   // a toast from the old run mid-animation would otherwise linger, naming a species that no longer exists
   if ($('seed')) $('seed').value = seed;
   fitCanvases();
   buildScenarioButtons();

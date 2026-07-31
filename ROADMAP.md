@@ -132,6 +132,43 @@ predation, and that foraging is unaffected by tick when the cycle is off.
 also shows its adaptations as glyphs, dimmed while spreading and solid once fixed, so
 a clade's strategy reads at a glance instead of as four decimal numbers.
 
+## Status
+
+**M7 shipped (2026-07-30).** Speciation notifications. 211 tests.
+
+### The moment now has a moment
+
+The biggest event the sim can produce — a new species emerging after tens of
+thousands of ticks — previously showed up as a number changing in a corner. Now: a
+toast naming the species (using M6's clade names) plus a brief pulse on the specimen
+well, timed to draw the eye back to what just happened.
+
+### Detection is peak-tracked, not raw-count
+
+Species count can legitimately wobble across the n>=5 viability threshold near a
+boundary — 2, then 1, then 2 again — without a second split having actually happened.
+Firing on "count is higher than last sample" would notify twice for one event.
+Fixed by tracking `state.peakSpeciesSeen` and firing only when the CURRENT count
+exceeds the highest ever seen this run, so returning to a count already reached
+never re-fires.
+
+### Naming the new species is a heuristic, stated honestly
+
+This model has no persistent lineage identity (see #18 below) — clade ids are
+re-derived by population rank every sample, so "clade 0" can be a different lineage
+from one sample to the next. The notification names the SMALLEST of the currently
+viable clades on the theory that a freshly split lineage has had the least time to
+grow. Reasonable, not rigorous — good enough for a toast, explicitly not treated as
+a real lineage feature. If #2 (lineage tracking) ever lands, this should be revisited
+to name the clade that is ACTUALLY new rather than merely small.
+
+### Deliberately non-intrusive, per owner's choice
+
+No pause, no modal. A CSS-driven pulse and a toast that dismisses on real wall-clock
+time (not sim ticks), so it reads the same at 1x and 20x speed. Reset clears any
+toast still on screen from the previous run rather than leaving it naming a species
+that no longer exists.
+
 ## Standing practice — in-app changelog
 
 Every future change that alters what the sim DOES gets a `CHANGELOG` entry in
