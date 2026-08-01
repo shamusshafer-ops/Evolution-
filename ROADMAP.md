@@ -289,7 +289,15 @@ fallback is not a degraded path: iOS Safari does not support `requestFullscreen`
 arbitrary elements at all, so on the platform where a popped-out view is most useful,
 the fallback IS the feature.
 
-## In progress — M10: learning (mechanism built, headline result not reached)
+## Added — navigable specimen well (2026-08-01)
+
+The embedded and fullscreen well now share one world-space camera. Drag pans; wheel,
+pinch, buttons, and +/- keys zoom from 1× to 8× around the cursor or gesture midpoint.
+Arrow keys pan, while double-click, the 1:1 button, or 0 resets the view. Camera state
+survives the canvas resize across fullscreen transitions. Pause/Run lives directly on
+the well as well as in the side panel, so fullscreen never hides simulation control.
+
+## M10 shipped (2026-08-01) — learning and partial genetic assimilation
 
 Two cognitive traits: `wariness` (innate, present at birth) and `plasticity` (how
 fast an organism learns to escape a predator by surviving an attempt). Scoped as an
@@ -299,10 +307,10 @@ after which the learned behaviour gets replaced by an inherited one because bein
 born already competent outcompetes needing to learn it. Owner explicitly wanted
 genetic assimilation as the headline result.
 
-**It has not happened.** Wariness rises under ordinary direct selection (0.09 ->
-0.23 over 30,000 ticks in the new `baldwin` scenario) but the learned component
-stays at ~0.005-0.01 -- negligible. Without a meaningful learned contribution there
-is nothing to assimilate.
+The first implementation did **not** produce the effect. Wariness rose under ordinary
+direct selection (0.09 -> 0.23 over 30,000 ticks), but the learned component stayed
+at ~0.005-0.01 -- negligible. Without a meaningful learned contribution there was
+nothing to assimilate.
 
 **Root cause, measured rather than guessed at:** a typical organism experiences
 under 0.5 predation attempts in its entire life (2.9-13.8 attempts per organism per
@@ -320,14 +328,77 @@ from experience cannot bootstrap when the experience essentially never happens.
    biology (single-exposure aversive conditioning is real), moved `learned` off
    exactly 0.000, still nowhere near enough.
 
-**What is needed next, not yet attempted:** an ECOLOGICAL change, not more constant
-tuning. Encounters per lifetime must rise by roughly an order of magnitude for
-one-trial learning to matter statistically across a population. That likely means a
-distinct high-encounter/low-lethality predation regime -- many survivable near-
-misses rather than few fatal attempts -- built as its OWN scenario config so M5's
-measured predation numbers (mean size 0.67 -> 1.80, the bistability result) are not
-touched. Do not tune the shared `PREDATION` constants to chase this; add scenario-
-specific overrides the way `seasonal`, `twoPatches` and `singleResource` already do.
+**The ecological fix:** Baldwin now has its own high-encounter/low-lethality predation
+profile. Scenario-local overrides widen reach, relax the size/profitability gates,
+and make most failed dodges survivable near-misses. A 40-tick attempt cooldown keeps
+the regime at roughly 10–16 attempts per lifetime rather than the first experimental
+overshoot of ~93. Lethality is 8%. Shared `PREDATION` constants are unchanged, so
+M5's mean-size and bistability results retain exactly their original meaning.
+
+### Measured result: partial, not complete, assimilation
+
+Across seeds `a`, `b`, and `c`, the mean source of escape ability changed as follows:
+
+| | 10,000 ticks | 75,000 ticks |
+|---|---:|---:|
+| Innate wariness | 0.111 | **0.646** |
+| Learned skill | 0.099 | 0.390 |
+
+Learned skill is now biologically meaningful rather than below 0.01, and innate
+wariness eventually overtakes it in every measured seed. The learned share of the
+combined escape phenotype falls as the inherited route takes over. That is the
+Baldwin direction and a reproducible partial genetic assimilation result.
+
+The qualifier matters: plasticity remains common (late mean above 0.20), and learned
+skill is not eliminated. M10 therefore ships as **partial assimilation**, not the
+stronger claim that learning was completely replaced. `test-learning.js` pins both
+the positive result and this limitation.
+
+## Added — heritable carnivory (2026-08-01)
+
+Food Chain begins with no predators. A scenario-gated binary `carnivore` adaptation
+can arise through the same mutation and sexual-inheritance path as armour, venom, and
+nocturnality. Carriers alone may hunt; they target the non-carnivore prey guild and
+cannot digest environmental food. That complete loss of the resource-foraging channel
+is the cost, so carnivory is conditionally useful and self-limiting rather than a free
+upgrade.
+
+The first carrier birth queues a one-time adaptation event. The UI announces it with
+a toast, and the morphology renderer adds forward teeth. Descendants inherit the gene;
+restarts clear the notification ledger.
+
+Measured at 30,000 ticks across seeds `a`, `b`, and `c`:
+
+| seed | predators / total | predation kills |
+|---|---:|---:|
+| a | 3 / 438 | 820 |
+| b | 6 / 477 | 702 |
+| c | 3 / 336 | 1,168 |
+
+Both trophic guilds persist in every run. Predators remain a small minority because
+their food supply is the prey population itself. `enabledBy:'carnivory'` also keeps
+the extra inheritance draw out of old adaptation scenarios, preserving their seeded
+RNG streams rather than merely preserving their configuration flags.
+
+## Added — advanced adaptations / Arms Race (2026-08-01)
+
+Arms Race is a controlled twin of Food Chain with one extra scenario flag. Three new
+binary genes add different ecological levers rather than three versions of “more
+damage”:
+
+- **Claws** reduce escape probability, with flat upkeep.
+- **Camouflage** cuts predator detection range to 56%, but cryptic movement is 18%
+  slower for both foraging and escape.
+- **Pack hunting** adds 34% effective hunting size per nearby cooperating carrier,
+  capped at two allies. A lone carrier pays coordination upkeep and gains nothing.
+
+Each is visible on the organism and species legend, inherited through the existing
+unlinked-locus model, and announced once on first appearance. The additional genes
+are gated behind `cfg.advancedAdaptations`, so Food Chain retains its exact RNG stream
+and its prior three-seed predator/prey measurement. In three exploratory 30,000-tick
+Arms Race runs, all populations survived (323–487 organisms), produced 359–560 kills,
+and all three new genes were still present; this is a viability check, not a claim
+that any one strategy must fix.
 
 **Also fixed while building this, and must not regress:** `traitDistance()` divides
 by trait count, so adding wariness/plasticity to the set speciation measures over

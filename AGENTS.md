@@ -25,12 +25,13 @@ node --check build/evo.js  # syntax check on the bundle
 cat tests/harness.js build/evo.js tests/test-NAME.js | node
 ```
 
-There is no `npm test` — the suite is 11 files, run one at a time. `tests/harness.js`
+There is no `npm test` — the suite is 13 files, run one at a time. `tests/harness.js`
 provides the browser-free globals (`document`, `window`, etc.) that let `sim.js` run
-headless. Current files (277 checks total as of this handoff): `test-core.js`,
+headless. Current files (343 checks total as of this handoff): `test-core.js`,
 `test-niche.js`, `test-render.js`, `test-selection.js`, `test-speciation.js`,
 `test-ui.js`, `test-environment.js`, `test-predation.js`, `test-adaptations.js`,
-`test-lineage.js`, `test-learning.js`. (`test-species.js` existed briefly in M2/M3
+`test-lineage.js`, `test-learning.js`, `test-carnivory.js`, and
+`test-advanced-adaptations.js`. (`test-species.js` existed briefly in M2/M3
 and was deleted when hardcoded species were replaced by emergent ones — if you see
 it referenced in old commit messages, that's why it's gone.)
 
@@ -43,7 +44,8 @@ loop with a short one.
 
 ## The rule that matters most: scenario-flag gating
 
-`cfg.predation`, `cfg.adaptations`, `cfg.dayNight`, `cfg.learning`. Every mechanic
+`cfg.predation`, `cfg.adaptations`, `cfg.dayNight`, `cfg.learning`, `cfg.carnivory`,
+`cfg.advancedAdaptations`. Every mechanic
 built after M4 lives behind one of these. **Never make a new mechanic apply
 unconditionally.** The reason: this repo's credibility rests on measured, reproduced
 findings (Gause's exclusion, Kleiber scaling, the M5 bistability, negative
@@ -90,9 +92,10 @@ not just positive ones:
 - `test-selection.js`: famine-vs-glut size difference is asserted to be UNMEASURED
   (below noise floor), not given a direction — an earlier version asserted a
   direction and it flipped sign between builds.
-- `test-learning.js`: the Baldwin effect's absence is pinned directly (`learned <
-  0.05` — read the comment; if this fails in the future because the ecological fix
-  landed, that's good news, update the test and ROADMAP.md together).
+- `test-learning.js`: the M10 result is pinned at its honest strength: learning becomes
+  meaningful and innate wariness later overtakes it, while plasticity remains common.
+  Do not strengthen "partial assimilation" into complete replacement without a new
+  multi-seed measurement.
 
 **Do not delete or loosen a negative-result test to make a build green.** If you
 believe the underlying phenomenon has genuinely changed (RNG-stream shifts from
@@ -102,26 +105,31 @@ touching a threshold, and say so in the commit message the way past commits have
 
 ## Where things currently stand (as of this handoff)
 
-- **M1–M9 shipped and stable**: allometric traits, niche partitioning, emergent
+- **M1–M10 shipped and stable**: allometric traits, niche partitioning, emergent
   sympatric + allopatric speciation, environmental dynamics (shocks/seasons/
   migration), predation with a measured bistability result, discrete adaptations
   with a measured frequency-dependence result, speciation notifications, persistent
   lineage tracking (splits/merges recorded explicitly), morphology (creatures drawn
-  from their traits), fullscreen.
-- **M10 (learning) is IN PROGRESS, not finished.** The mechanism is real and tested;
-  the headline result (genetic assimilation) is not yet demonstrated. Full writeup
-  in `ROADMAP.md` under "In progress — M10". Read it before touching `LEARNING` in
-  `src/data.js` or the predation/learning interaction in `src/sim.js` — there is a
-  specific measured bottleneck (encounter rate) and two things already tried that
-  didn't fully fix it, so don't repeat that tuning path.
+  from their traits), fullscreen, a pannable/zoomable well with in-view pause, and
+  learning with a measured partial Baldwin effect.
+- **M10's encounter bottleneck is fixed.** Baldwin alone overrides reach, size gate,
+  cooldown, and lethality to produce roughly 10–16 survivable encounters per lifetime;
+  shared M5 predation constants are unchanged. Across seeds a meaningful learned
+  contribution appears first and innate wariness overtakes it by 75k ticks. Plasticity
+  remains common, so call this partial genetic assimilation, not complete replacement.
+- **Heritable carnivory is shipped.** Food Chain starts with prey only; mutation can
+  create obligate carnivores that hunt non-carriers but cannot eat environmental food.
+  The first birth notifies once per run. `enabledBy:'carnivory'` keeps the fourth
+  adaptation out of older inheritance RNG streams. Three 30k seeds retain both guilds.
+- **Advanced adaptations are shipped in Arms Race.** Claws act on escape probability,
+  camouflage on detection and movement, and nearby pack carriers on effective hunting
+  size. The extra flag preserves Food Chain’s RNG stream. Three exploratory 30k runs
+  retained viable populations and all three genes; do not strengthen that into a
+  fixation or equilibrium claim without a controlled comparison.
 
-**Next decision, not yet made:** whether to (a) build a high-encounter/low-lethality
-predation regime as its own scenario to give learning enough experience to work with
-(the currently-recommended path — see ROADMAP.md), (b) ship M10 as-is with the
-negative result as the documented finding, or (c) shelve learning. This needs a
-human decision (or an explicit instruction to proceed with (a)) before more tuning
-happens — repeated unguided tuning attempts on this exact problem already cost two
-iterations in the previous session.
+**Next product decision:** owner-ranked #32 (eras / genuine unlock thresholds) is the
+next large game-mode slice. Follow-a-lineage (#33) and timeline compression (#34) are
+smaller alternatives. Keep science-mode scenarios reproducible whichever comes next.
 
 ## Pushing
 
@@ -133,6 +141,6 @@ sufficient) rather than assuming `git` is configured. Do not commit a token to a
 file in this repo, ever, including this one.
 
 Before pushing: `node build.js && node build.js --check`, run the full test suite
-(budget ~15-20 minutes for all 11 files individually), then push `src/`, `build/`,
+(budget ~15-20 minutes for all 13 files individually), then push `src/`, `build/`,
 `index.html`, `tests/`, and the three doc files together in one commit so the
 generated artifacts never drift from `src/` in the remote history.

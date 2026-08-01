@@ -15,7 +15,7 @@
 |19| Artificial-selection mode | Player becomes the selective pressure; the Darwin-and-pigeon-breeders contrast. Ranked #4 by owner | M | Backlog |
 |7| Trait correlation view (scatter) | Are fast organisms also small? The ribbon cannot show joint distributions | M | Backlog |
 |8| Export run history as CSV | For anyone wanting to analyse outside the tool | S | Backlog |
-|9| Pinch-zoom / pan the specimen well | At 1400 organisms individuals are hard to follow | M | Backlog |
+|9| Pinch-zoom / pan the specimen well | At 1400 organisms individuals are hard to follow | M | **Shipped 2026-08-01** — drag, wheel/pinch/buttons/keyboard, 8× zoom, persistent fullscreen camera, and in-view Pause/Run |
 |10| Energy-cost breakdown inspector | Click an organism, see basal/travel/vision split | S | Backlog |
 |11| Mutation rate as a run parameter | Currently fixed per trait in data.js; exposing it is a strong teaching lever | S | Backlog |
 |12| Carrying-capacity readout | Population always saturates to food supply; make that visible rather than implicit | S | Backlog |
@@ -28,11 +28,13 @@
 |25| Discrete adaptations (armour, venom, nocturnal) | Legible evolutionary stories; conditional benefits | M | **Shipped 2026-07-30** |
 |26| Speciation as an EVENT (toast + flash + auto-name) | Owner-ranked #2 | S | **Shipped 2026-07-30** |
 |27| Fix scenario distinctness | Owner-ranked #3. Temperate/famine/glut land within ~6% of each other on every axis: 9 scenarios, ~3 distinct outcomes | M | Backlog |
-|28| Social/flocking adaptation | The fourth adaptation, deferred from M6 — needs neighbour queries, more expensive than the other three | M | Backlog |
+|28| Social/flocking adaptation | Nearby carnivore carriers cooperate to cross the prey-size gate; lone carriers pay upkeep without a bonus | M | **Shipped 2026-08-01** — pack hunting in Arms Race |
 |29| Name the ACTUAL new clade, not the smallest one | Fixed by #2 — the matcher records which group is genuinely new, so the toast names exact parentage | S | **Shipped 2026-07-30** |
 |30| Phylogeny view | The DATA now exists (#2 shipped: persistent ids, split/merge events with parents). This is the visualisation on top of it — a tree of who descended from whom | M | Backlog |
 |31| Morphology — draw creatures as their traits describe | Owner-ranked #1 of the SPORE evaluation. Pure rendering, no sim change | M | **Shipped 2026-07-30** |
 |32| Eras / unlock thresholds | Owner-ranked #2. Thresholds unlocking new trait axes. Riskiest item: badly done it becomes a skill tree with evolution flavouring | L | Next up |
 |33| Follow a lineage (camera + filtered UI) | Owner-ranked #3. Cheap now that lineage ids persist (M8) | M | Backlog |
 |34| Compress the timeline | Owner-ranked #4. Measured: first event at ~216s at 1x; two scenarios produce none in 30k ticks | S | Backlog |
-|35| Learning / Baldwin effect | Mechanism built (wariness, plasticity, one-trial learning), gated behind cfg.learning. Assimilation not yet demonstrated -- needs a high-encounter/low-lethality predation regime as its own scenario, not shared-constant tuning. See ROADMAP + AGENTS.md | L | In progress |
+|35| Learning / Baldwin effect | Scenario-local high-encounter/low-lethality ecology makes learning meaningful; innate wariness later overtakes learned skill across three seeds. Plasticity remains common, so the result is partial assimilation, documented honestly | L | **Shipped 2026-08-01** |
+|36| Heritable carnivory | Food Chain starts prey-only; obligate carnivores arise by mutation, inherit the role, cannot eat environmental food, and trigger a one-time emergence notification. Predator and prey guilds coexist across three measured seeds | M | **Shipped 2026-08-01** |
+|37| Advanced adaptation detail | Add visually and mechanically distinct strategies beyond armour and venom | M | **Shipped 2026-08-01** — claws, camouflage, and pack hunting; each inherited, visible, conditional, and announced |

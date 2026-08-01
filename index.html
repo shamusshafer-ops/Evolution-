@@ -51,15 +51,23 @@
      fill it, since the element keeps its original flex sizing otherwise. */
   #wellWrap:fullscreen{ background:var(--well); }
   #wellWrap:-webkit-full-screen{ background:var(--well); }
-  #btnFull{
+  #wellTools{
     position:absolute; top:8px; right:8px; z-index:2;
-    min-height:0; padding:5px 9px; font-size:13px; line-height:1;
+    display:flex; gap:4px;
+  }
+  #wellTools button{
+    min-height:0; padding:5px 8px; font-size:12px; line-height:1;
     background:rgba(16,30,36,0.82); border:1px solid var(--rule); border-radius:2px;
     color:var(--chalk-dim); cursor:pointer;
   }
-  #btnFull:hover{ color:var(--chalk); border-color:var(--chalk-dim); }
-  #btnFull:focus-visible{ outline:2px solid var(--sense); outline-offset:2px; }
-  #well{ flex:1; width:100%; border:1px solid var(--rule); background:var(--well); display:block; border-radius:2px; }
+  #wellTools button:hover{ color:var(--chalk); border-color:var(--chalk-dim); }
+  #wellTools button:focus-visible{ outline:2px solid var(--sense); outline-offset:2px; }
+  #btnViewRun{ min-width:57px; }
+  #well{
+    flex:1; width:100%; border:1px solid var(--rule); background:var(--well);
+    display:block; border-radius:2px; cursor:grab; touch-action:none;
+  }
+  #well.dragging{ cursor:grabbing; }
   /* A brief pulse synced to the toast appearing, drawing the eye back to the well at
      the moment a split actually happened — the toast alone can be read without ever
      looking at the sim itself, which would defeat the point. Pure CSS animation, no
@@ -152,8 +160,22 @@
   .spname{ flex:1; font-size:11.5px; }
   .spcount{ font-variant-numeric:tabular-nums; font-size:12px; }
   #specimen{ width:100%; height:150px; display:block; border-radius:2px; }
+  .specimenLegend{
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px 10px;
+    padding:7px 9px 8px; border-top:1px solid var(--medium); color:var(--chalk-dim);
+    font-size:10px; line-height:1.35;
+  }
+  .specimenLegend strong{ color:var(--chalk); font-weight:600; }
+  .legendMark{ color:var(--sense); font-size:12px; }
   .adGlyphs{ font-size:13px; letter-spacing:2px; margin-right:6px; }
-  .adGlyph{ display:inline-block; }
+  .adGlyph{ display:inline-block; position:relative; cursor:help; }
+  .adGlyph:focus-visible{ outline:1px solid currentColor; outline-offset:2px; border-radius:1px; }
+  .adGlyph:hover::after, .adGlyph:focus-visible::after{
+    content:attr(data-tip); position:absolute; z-index:12; right:0; bottom:calc(100% + 5px);
+    width:190px; padding:6px 7px; border:1px solid var(--rule); border-radius:2px;
+    background:var(--well); color:var(--chalk); font:10px/1.35 var(--mono);
+    letter-spacing:0; text-align:left; pointer-events:none;
+  }
   #shockActive{
     margin-top:8px; padding:8px 9px; border:1px solid var(--food); color:var(--chalk);
     font-size:11px; line-height:1.5; border-radius:2px;
@@ -235,9 +257,15 @@
 <main>
   <div class="stage">
     <div id="wellWrap">
-      <canvas id="well" aria-label="Specimen well: organisms foraging"></canvas>
+      <canvas id="well" tabindex="0" aria-label="Specimen well: organisms foraging. Drag to pan; wheel or pinch to zoom."></canvas>
       <div id="wellFlash"></div>
-      <button id="btnFull" title="Fullscreen" aria-pressed="false">&#9906;</button>
+      <div id="wellTools" role="group" aria-label="Specimen well controls">
+        <button id="btnViewRun" title="Pause simulation (Space)" aria-pressed="true">Pause</button>
+        <button id="btnZoomOut" title="Zoom out" aria-label="Zoom out">&minus;</button>
+        <button id="btnZoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+        <button id="btnViewReset" title="Reset view (0)" aria-label="Reset view">1:1</button>
+        <button id="btnFull" title="Fullscreen" aria-label="Toggle fullscreen" aria-pressed="false">&#9906;</button>
+      </div>
     </div>
     <canvas id="census" aria-label="Population by species over time"></canvas>
     <canvas id="ribbon" aria-label="Trait drift over generations"></canvas>
@@ -302,6 +330,14 @@
       <h2>Specimens</h2>
       <div class="body" style="padding:6px;">
         <canvas id="specimen" aria-label="Current form of each species"></canvas>
+        <div class="specimenLegend" aria-label="How to read specimen forms">
+          <span><strong>Body hue</strong> — diet; the species dot is lineage.</span>
+          <span><strong>Body width</strong> — size.</span>
+          <span><strong>Long body + tail</strong> — speed.</span>
+          <span><strong>Large eyes</strong> — sense range.</span>
+          <span><span class="legendMark">▣ ✳ ☾ ▲</span> — armour, venom, nocturnal, carnivore.</span>
+          <span><span class="legendMark">⟑ ◌ ⧉</span> — claws, camouflage, pack hunting.</span>
+        </div>
       </div>
     </section>
 
@@ -421,6 +457,14 @@ const VERSION = '0.1.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-08-01', tag:'ecology', title:'A richer evolutionary arms race',
+    text:'The new Arms Race scenario adds three visible, binary, heritable adaptations without changing the measured Food Chain run. Claws reduce a prey’s chance to escape but cost upkeep. Camouflage shrinks predator detection range but slows movement. Pack hunters can combine the effective size of nearby cooperating predators, but the gene costs upkeep and gives a lone carrier nothing. Each first appearance is announced.' },
+  { date:'2026-08-01', tag:'ui', title:'The specimen well is navigable',
+    text:'Drag to pan and use the wheel, pinch gesture, +/− buttons, or keyboard to zoom up to 8×. The camera stays on the same location when fullscreen opens or closes. Pause/Run is now available directly over the well in both views; double-click, 1:1, or the 0 key resets the camera.' },
+  { date:'2026-08-01', tag:'ecology', title:'Carnivory can evolve',
+    text:'The Food Chain scenario starts with prey only. A binary carnivore gene can arise by mutation and is inherited by descendants: carriers grow visible forward teeth, can hunt non-carnivores, and cannot digest environmental food. That strict tradeoff keeps predators self-limiting instead of turning carnivory into a free upgrade. A one-time toast announces the first predator birth. Across three 30,000-tick runs, predators and prey coexist while carnivores remain a small minority and produce hundreds of kills.' },
+  { date:'2026-08-01', tag:'M10', title:'Learning gets an ecology — partial genetic assimilation measured',
+    text:'The Baldwin scenario now supplies frequent, usually survivable predator near-misses without changing the shared predation rules. Across three seeds, encounters rose from under 0.5 to roughly 10–16 per lifetime; learned escape skill became meaningful first, then innate wariness overtook it in every run by 75,000 ticks. Plasticity remains common, so the measured result is partial genetic assimilation, not complete replacement. M5 predation and every earlier scenario retain their original constants.' },
   { date:'2026-07-30', tag:'M10', title:'Learning — mechanism built, headline result not yet reached',
     text:'Two new traits: wariness (innate escape ability, present at birth) and plasticity (how fast an organism learns to escape from surviving a predator). Both cost neural upkeep, plasticity 2.5x more, because a plastic nervous system really is pricier to run than a hardwired one. Scoped as an experiment in the Baldwin effect — genetic assimilation, where a learned behaviour gets replaced by an inherited one once it is reliably useful — and honestly: that has not happened yet. Wariness rises under ordinary selection (0.09 → 0.23 over 30,000 ticks), but the learned component stays negligible, because a typical organism experiences under half a predation encounter in its entire life. Not enough experience to learn from. Documented as a known gap rather than hidden — see AGENTS.md for what a fix would need.' },
   { date:'2026-07-30', tag:'ui', title:'Fullscreen',
@@ -760,6 +804,45 @@ const ADAPTATIONS = [
     costCoef: 0, costExp: 0, senseMul: 0.62,
     blurb:'Forages at night, competing only with other nocturnals. Sees less well in the dark. Being the rare phase is the advantage, so this should hold a stable mix rather than take over.'
   },
+  {
+    key:'carnivore', name:'Carnivore', short:'CAR', color:'#F06A4F', glyph:'▲',
+    enabledBy:'carnivory', notify:true,
+    /* Obligate carnivory is paid for through opportunity rather than a flat upkeep:
+       carriers cannot digest environmental food at all. They must catch prey. This
+       makes the benefit frequency-dependent — powerful while prey are abundant,
+       self-limiting when predators become common. */
+    costCoef:0, costExp:0,
+    emergence:'can now hunt prey but must live on prey alone.',
+    blurb:'Can hunt other organisms but cannot digest environmental food. Heritable and self-limiting: predators prosper only while enough prey remain.'
+  },
+  {
+    key:'claws', name:'Claws', short:'CLW', color:'#F2C14E', glyph:'⟑',
+    enabledBy:'advancedAdaptations', notify:true,
+    /* Claws improve grip during the strike, reducing escape rather than bypassing
+       the size gate (venom already owns that niche). Keratin is cheap; maintaining
+       the muscle and structure that uses it is not, hence a small flat upkeep. */
+    costCoef:0.014, costExp:0, captureMul:0.58,
+    emergence:'can hold fleeing prey more effectively.',
+    blurb:'Reduces prey escape odds during a strike. Costs constant upkeep and gives non-predators no benefit.'
+  },
+  {
+    key:'camouflage', name:'Camouflage', short:'CAM', color:'#75B798', glyph:'◌',
+    enabledBy:'advancedAdaptations', notify:true,
+    /* Crypsis works by remaining inconspicuous. Moving slowly is the opportunity
+       cost: it reduces both food-search displacement and speed-based escape. */
+    costCoef:0, costExp:0, detectMul:0.56, moveMul:0.82,
+    emergence:'is harder for predators to detect.',
+    blurb:'Predators must get much closer to detect a carrier, but cryptic movement is slower while foraging and escaping.'
+  },
+  {
+    key:'pack', name:'Pack hunting', short:'PCK', color:'#E58C62', glyph:'⧉',
+    enabledBy:'advancedAdaptations', notify:true,
+    /* Cooperation is deliberately frequency-dependent: a lone carrier pays the
+       signalling/coordination cost and receives no hunting bonus. */
+    costCoef:0.012, costExp:0, radius:48, sizePerAlly:0.34, maxAllies:2,
+    emergence:'can cooperate with nearby pack hunters.',
+    blurb:'Nearby carnivore carriers combine enough force to tackle larger prey. A lone carrier still pays coordination upkeep and gains nothing.'
+  },
 ];
 const ADAPT_KEYS = ADAPTATIONS.map(a => a.key);
 const ADAPT_BY_KEY = {};
@@ -944,10 +1027,28 @@ const SCENARIOS = [
   { id:'wild',      name:'Wild',       blurb:'Everything at once: predators, day and night, and all three adaptations in play. Armour, venom and nocturnality each pay off only under the right conditions.',
     patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34, predation:true, adaptations:true, dayNight:true } },
 
-  /* The Baldwin experiment. Identical to Predation in every respect except that
-     organisms can learn, so any difference in outcome is learning and nothing else. */
-  { id:'baldwin',   name:'Baldwin',    blurb:'Predators, and organisms that learn to escape them. Watch innate wariness slowly replace learned skill — behaviour that had to be learned becoming inherited.',
-    patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34, predation:true, learning:true } },
+  /* Obligate predators arise by mutation from the founding herbivore population.
+     Only carnivore carriers may hunt, and they cannot eat environmental food. */
+  { id:'foodchain', name:'Food Chain', blurb:'Carnivory can evolve: predators eat organisms but cannot eat environmental food. Their own success depends on leaving enough prey alive.',
+    patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34,
+      predation:true, adaptations:true, carnivory:true, predationReachMul:5.0,
+      predationSizeRatio:1.10, predationMinPreySize:0.35 } },
+
+  /* Controlled twin of Food Chain. The extra flag keeps three additional genes —
+     and their inheritance RNG draws — completely out of that measured scenario. */
+  { id:'armsrace', name:'Arms Race', blurb:'Food Chain plus claws, camouflage, and cooperative pack hunting. Every advantage carries a cost, and each new adaptation announces itself.',
+    patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34,
+      predation:true, adaptations:true, carnivory:true, advancedAdaptations:true,
+      predationReachMul:5.0, predationSizeRatio:1.10, predationMinPreySize:0.35 } },
+
+  /* The Baldwin experiment needs frequent, survivable experience rather than M5's
+     rare lethal kills. These overrides belong to this scenario only: the shared
+     PREDATION constants and their measured bistability remain untouched. */
+  { id:'baldwin',   name:'Baldwin',    blurb:'Frequent predator near-misses give organisms a chance to learn. Watch whether costly plasticity opens the path for cheaper innate wariness.',
+    patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34,
+      predation:true, learning:true, predationReachMul:9.0, predationSizeRatio:1.05,
+      predationMinPreySize:0, predationCooldown:40, predationAttemptCooldown:40,
+      predationLethality:0.08 } },
 
   { id:'predation', name:'Predation',  blurb:'Same food as Temperate, but large organisms can eat smaller ones. Size finally buys something proportional to what it costs.',
     patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34, predation:true } },
@@ -1041,10 +1142,11 @@ function makeState(opts){
     nextLineageId: 0,      // monotonic; a lineage id is never reused, so ancestry stays unambiguous
     lineageOf: new Map(),  // organism id -> lineage id, as of the last computeSpecies() call
     events: [],            // queued notifications for the UI to drain (speciation, etc.)
+    adaptationsSeen: {},   // one-time emergence notifications, reset with each run
     foodCarry: 0,
     running: false,
     speedMult: 1,
-    stats: { born:0, starved:0, aged:0, eaten:0, peakPop:0, unmated:0, culled:0, predated:0, escapes:0 },
+    stats: { born:0, starved:0, aged:0, eaten:0, peakPop:0, unmated:0, culled:0, predated:0, escapes:0, predationAttempts:0, nearMisses:0 },
     history: [],          // per-sample trait means
     ribbon: [],           // per-sample trait HISTOGRAMS, for the drift ribbon
     sampleEvery: 30,
@@ -1095,10 +1197,21 @@ function escapeAbility(o){
 function adaptationCost(o){
   let c = 0;
   for (const a of ADAPTATIONS){
+    if (a.enabledBy && !state.cfg[a.enabledBy]) continue;
     if (!o.ad || !o.ad[a.key] || !a.costCoef) continue;
     c += a.costExp ? a.costCoef * Math.pow(massOf(o), a.costExp) : a.costCoef;
   }
   return c;
+}
+
+/* Camouflage is paid through opportunity rather than metabolism: moving cautiously
+   preserves concealment, but covers less ground and also supplies less raw speed in
+   an escape. Gated so an invented carrier cannot affect an older scenario. */
+function movementSpeed(o){
+  if (state.cfg.advancedAdaptations && o.ad && o.ad.camouflage){
+    return o.speed * ADAPT_BY_KEY.camouflage.moveMul;
+  }
+  return o.speed;
 }
 
 /* Sense is degraded at night for a nocturnal forager — it is dark. This is the cost
@@ -1286,6 +1399,9 @@ function wrapDelta(d, span){
 
 function findFood(o, fg){
   const cfg = state.cfg;
+  // Obligate carnivores trade the entire environmental-food channel for access to
+  // prey. That opportunity cost is what keeps carnivory from being a free upgrade.
+  if (cfg.carnivory && o.ad && o.ad.carnivore) return -1;
   const sense = effectiveSense(o);
   const reach = Math.ceil(sense / fg.cell);
   const cx = clamp(Math.floor(o.x / fg.cell), 0, fg.cols-1);
@@ -1369,7 +1485,9 @@ function reproduceSexual(a, b){
   // appearing or vanishing is a much bigger event than a continuous nudge.
   const childAdapt = {};
   if (state.cfg.adaptations){
-    for (const k of ADAPT_KEYS){
+    for (const def of ADAPTATIONS){
+      if (def.enabledBy && !state.cfg[def.enabledBy]) continue;
+      const k = def.key;
       let v = (rnd() < 0.5) ? !!a.ad[k] : !!b.ad[k];
       if (rnd() < ADAPT_MUTATE) v = !v;
       childAdapt[k] = v;
@@ -1387,6 +1505,7 @@ function reproduceSexual(a, b){
   child.energy = giveA + giveB;
   child.dir = rnd() * Math.PI * 2;
   state.organisms.push(child);
+  detectAdaptationEmergence(child, a);
   state.stats.born++;
   if (child.gen > state.generation) state.generation = child.gen;
   return child;
@@ -1479,8 +1598,9 @@ function step(){
     }
 
     /* --- move --- */
-    o.x += Math.cos(o.dir) * o.speed;
-    o.y += Math.sin(o.dir) * o.speed;
+    const moveSpeed = movementSpeed(o);
+    o.x += Math.cos(o.dir) * moveSpeed;
+    o.y += Math.sin(o.dir) * moveSpeed;
     if (cfg.wrap){
       o.x = ((o.x % cfg.w) + cfg.w) % cfg.w;
       o.y = ((o.y % cfg.h) + cfg.h) % cfg.h;
@@ -1578,17 +1698,47 @@ function traitHistogram(key, bins){
    starve can still be eaten — its energy goes to the predator rather than
    evaporating — which is both more realistic and avoids a strange edge case where
    starving organisms become magically unhuntable in their final tick. */
+function effectivePackSize(pred, allies){
+  if (!state.cfg.advancedAdaptations || !pred.ad || !pred.ad.carnivore || !pred.ad.pack) return pred.size;
+  const def=ADAPT_BY_KEY.pack;
+  return pred.size * (1 + Math.min(def.maxAllies,Math.max(0,allies||0)) * def.sizePerAlly);
+}
+
+function camouflageDetectionMul(prey){
+  return state.cfg.advancedAdaptations && prey.ad && prey.ad.camouflage
+    ? ADAPT_BY_KEY.camouflage.detectMul : 1;
+}
+
+function predationEscapeChance(pred, prey){
+  const predSpeed=movementSpeed(pred), preySpeed=movementSpeed(prey);
+  const speedAdv=(preySpeed-predSpeed)/Math.max(0.001,predSpeed);
+  let chance=clamp(speedAdv*PREDATION.escapeMul,0,0.95);
+  chance=clamp(chance+escapeAbility(prey)*LEARNING.escapeWeight,0,0.95);
+  if (state.cfg.advancedAdaptations && pred.ad && pred.ad.claws){
+    chance *= ADAPT_BY_KEY.claws.captureMul;
+  }
+  return chance;
+}
+
 function predationPass(){
   const cfg = state.cfg;
   if (!cfg.predation) return;
   const pop = state.organisms;
   if (pop.length < 2) return;
 
+  // Scenario overrides support ecologies that ask a different question from M5's
+  // rare, lethal size contest. Undefined fields fall back to the original constants,
+  // preserving every previously measured predation scenario exactly.
+  const reachMul = cfg.predationReachMul == null ? PREDATION.reachMul : cfg.predationReachMul;
+  const sizeRatio = cfg.predationSizeRatio == null ? PREDATION.sizeRatio : cfg.predationSizeRatio;
+  const minPreySize = cfg.predationMinPreySize == null ? PREDATION.minPreySize : cfg.predationMinPreySize;
+  const killCooldown = cfg.predationCooldown == null ? PREDATION.cooldown : cfg.predationCooldown;
+
   // Cell sized to the largest plausible strike range so a predator's targets are
   // always within the 3x3 neighbourhood.
   let maxReach = 0;
   for (const o of pop){
-    const r = o.size * PREDATION.reachMul;
+    const r = o.size * reachMul;
     if (r > maxReach) maxReach = r;
   }
   const cell = Math.max(8, maxReach);
@@ -1604,11 +1754,43 @@ function predationPass(){
 
   const eaten = new Uint8Array(pop.length);
 
+  function nearbyPackAllies(pred, predIndex){
+    if (!cfg.advancedAdaptations || !pred.ad || !pred.ad.carnivore || !pred.ad.pack) return 0;
+    const def = ADAPT_BY_KEY.pack;
+    const cells = Math.ceil(def.radius / cell);
+    const pcx = clamp(Math.floor(pred.x/cell),0,cols-1);
+    const pcy = clamp(Math.floor(pred.y/cell),0,rows-1);
+    const seen = new Set();
+    let allies = 0;
+    for (let gy=pcy-cells; gy<=pcy+cells; gy++){
+      for (let gx=pcx-cells; gx<=pcx+cells; gx++){
+        let ax=gx, ay=gy;
+        if (cfg.wrap){ ax=((gx%cols)+cols)%cols; ay=((gy%rows)+rows)%rows; }
+        else if (gx<0||gy<0||gx>=cols||gy>=rows) continue;
+        const bucket=grid.get(ay*cols+ax); if (!bucket) continue;
+        for (const j of bucket){
+          if (j===predIndex || eaten[j] || seen.has(j)) continue;
+          seen.add(j);
+          const ally=pop[j];
+          if (!ally.ad || !ally.ad.carnivore || !ally.ad.pack) continue;
+          const dx=wrapDelta(ally.x-pred.x,cfg.w), dy=wrapDelta(ally.y-pred.y,cfg.h);
+          if (dx*dx+dy*dy <= def.radius*def.radius && ++allies >= def.maxAllies) return allies;
+        }
+      }
+    }
+    return allies;
+  }
+
   for (let i = 0; i < pop.length; i++){
     if (eaten[i]) continue;                       // a corpse cannot hunt
     const pred = pop[i];
+    // In Food Chain, hunting is a heritable ecological role rather than something
+    // every sufficiently large organism can do. Other scenarios retain M5's rules.
+    if (cfg.carnivory && !(pred.ad && pred.ad.carnivore)) continue;
     if (pred.predCooldown > 0){ continue; }
-    const reach = pred.size * PREDATION.reachMul;
+    const reach = pred.size * reachMul;
+    const packAllies = nearbyPackAllies(pred, i);
+    const effectiveSize = effectivePackSize(pred, packAllies);
     const cx = clamp(Math.floor(pred.x/cell),0,cols-1);
     const cy = clamp(Math.floor(pred.y/cell),0,rows-1);
 
@@ -1623,6 +1805,9 @@ function predationPass(){
         for (const j of bucket){
           if (j === i || eaten[j]) continue;
           const prey = pop[j];
+          // Food Chain separates trophic roles cleanly: carnivores hunt the
+          // non-carnivore prey guild, not one another.
+          if (cfg.carnivory && prey.ad && prey.ad.carnivore) continue;
           // Armour: cannot be eaten at all. The single clearest conditional benefit
           // in the model — decisive where predation exists, dead weight where it
           // does not, which is exactly the stickleback armour-loss story.
@@ -1630,13 +1815,15 @@ function predationPass(){
           // Size gate: predators are meaningfully larger, not marginally — UNLESS the
           // predator is venomous, which is the whole point of venom: it buys entry to
           // the predator niche without paying for a large body.
-          if (!(pred.ad && pred.ad.venom) && pred.size < prey.size * PREDATION.sizeRatio) continue;
+          if (!(pred.ad && pred.ad.venom) && effectiveSize < prey.size * sizeRatio) continue;
           // Profitability gate (optimal foraging): very small prey are not worth
           // the handling cost. This is the size refuge — see PREDATION.minPreySize.
-          if (prey.size < PREDATION.minPreySize) continue;
+          if (prey.size < minPreySize) continue;
           const dx = wrapDelta(prey.x - pred.x, cfg.w);
           const dy = wrapDelta(prey.y - pred.y, cfg.h);
           const d2 = dx*dx + dy*dy;
+          const visibleReach=reach*camouflageDetectionMul(prey);
+          if (d2 > visibleReach*visibleReach) continue;
           if (d2 < bestD2){ bestD2 = d2; target = j; }
         }
       }
@@ -1644,17 +1831,22 @@ function predationPass(){
 
     if (target < 0) continue;
     const prey = pop[target];
+    state.stats.predationAttempts = (state.stats.predationAttempts||0) + 1;
 
     /* Escape. A prey faster than its pursuer frequently gets away; a slower one
        rarely does. Without this, size would be strictly dominant and the arms race
        would collapse into a size runaway — the escape term is what keeps speed
        worth paying for and keeps the tradeoff two-sided. */
-    const speedAdv = (prey.speed - pred.speed) / Math.max(0.001, pred.speed);
-    let pEscape = clamp(speedAdv * PREDATION.escapeMul, 0, 0.95);
-    // Escape ability (innate wariness + learned skill) adds to the speed-based odds.
-    pEscape = clamp(pEscape + escapeAbility(prey) * LEARNING.escapeWeight, 0, 0.95);
-    if (rnd() < pEscape){
-      state.stats.escapes = (state.stats.escapes||0) + 1;
+    // Escape ability combines movement, learned/innate avoidance, and any claw grip.
+    const pEscape = predationEscapeChance(pred, prey);
+    const escaped = rnd() < pEscape;
+    // In the Baldwin ecology an unsuccessful dodge is usually still a survivable
+    // near-miss. That supplies experience without making learning a free survival
+    // guarantee: repeated failures still accumulate real mortality risk.
+    const nearMiss = !escaped && cfg.predationLethality != null && rnd() >= cfg.predationLethality;
+    if (escaped || nearMiss){
+      if (escaped) state.stats.escapes = (state.stats.escapes||0) + 1;
+      else state.stats.nearMisses = (state.stats.nearMisses||0) + 1;
       // Surviving a near-miss is the learning event. Gain is a fraction of REMAINING
       // headroom, so skill rises fast at first and plateaus — diminishing returns,
       // which is how skill acquisition actually behaves.
@@ -1663,12 +1855,13 @@ function predationPass(){
         if (head > 0) prey.learned += head * LEARNING.gainPerEscape * prey.plasticity;
       }
       prey.escapes = (prey.escapes || 0) + 1;
+      if (cfg.predationAttemptCooldown != null) pred.predCooldown = cfg.predationAttemptCooldown;
       continue;
     }
 
     eaten[target] = 1;
     pred.energy += prey.energy * PREDATION.efficiency;
-    pred.predCooldown = PREDATION.cooldown;
+    pred.predCooldown = killCooldown;
     pred.kills = (pred.kills || 0) + 1;
     state.stats.predated = (state.stats.predated || 0) + 1;
   }
@@ -1677,6 +1870,24 @@ function predationPass(){
     const keep = [];
     for (let i = 0; i < pop.length; i++) if (!eaten[i]) keep.push(pop[i]);
     state.organisms = keep;
+  }
+}
+
+/* Notify at the first live birth carrying a scenario-specific adaptation. Founders
+   begin without adaptations, so in a real run this is the mutation event itself.
+   The flag is per-run and prevents inherited descendants from spamming the player. */
+function detectAdaptationEmergence(child, parent){
+  if (!child.ad) return;
+  for (const def of ADAPTATIONS){
+    if (!def.notify || !child.ad[def.key]) continue;
+    if (def.enabledBy && !state.cfg[def.enabledBy]) continue;
+    if (state.adaptationsSeen[def.key]) continue;
+    state.adaptationsSeen[def.key] = true;
+    state.events.push({
+      type:'adaptation', tick:state.tick, key:def.key, name:def.name,
+      glyph:def.glyph, color:def.color, message:def.emergence || 'has appeared.',
+      lineage:cladeName(parent && parent.clade != null ? parent.clade : child.clade),
+    });
   }
 }
 
@@ -2082,7 +2293,9 @@ function extinct(){ return state.organisms.length === 0; }
    ========================================================================== */
 
 let _well = null, _wellCtx = null, _ribbon = null, _ribbonCtx = null;
-let _view = { scale:1, ox:0, oy:0 };
+let _view = { scale:1, baseScale:1, ox:0, oy:0 };
+let _camera = { zoom:1, cx:null, cy:null };
+const VIEW_MIN_ZOOM = 1, VIEW_MAX_ZOOM = 8;
 
 function initRender(){
   _well   = document.getElementById('well');
@@ -2105,10 +2318,62 @@ function fitCanvases(){
     c.height = Math.max(1, Math.round(r.height * dpr));
   }
   const cfg = state ? state.cfg : WORLD;
-  const s = Math.min(_well.width / cfg.w, _well.height / cfg.h);
-  _view.scale = s;
-  _view.ox = (_well.width  - cfg.w * s) / 2;
-  _view.oy = (_well.height - cfg.h * s) / 2;
+  _view.baseScale = Math.min(_well.width / cfg.w, _well.height / cfg.h);
+  if (!Number.isFinite(_camera.cx)) _camera.cx = cfg.w / 2;
+  if (!Number.isFinite(_camera.cy)) _camera.cy = cfg.h / 2;
+  updateViewTransform();
+}
+
+/* ---------- Well camera ----------
+   Camera position is stored in WORLD coordinates, rather than canvas pixels. That
+   makes the view survive a backing-store resize when entering or leaving fullscreen:
+   the same organism remains centred even though the number of screen pixels changes. */
+function updateViewTransform(){
+  if (!_well) return;
+  const cfg = state ? state.cfg : WORLD;
+  _camera.zoom = Math.max(VIEW_MIN_ZOOM, Math.min(VIEW_MAX_ZOOM, _camera.zoom || 1));
+  const nextScale = _view.baseScale * _camera.zoom;
+  const halfW = Math.min(cfg.w/2, _well.width / (2*nextScale));
+  const halfH = Math.min(cfg.h/2, _well.height / (2*nextScale));
+  _camera.cx = Math.max(halfW, Math.min(cfg.w - halfW, Number.isFinite(_camera.cx) ? _camera.cx : cfg.w/2));
+  _camera.cy = Math.max(halfH, Math.min(cfg.h - halfH, Number.isFinite(_camera.cy) ? _camera.cy : cfg.h/2));
+  _view.scale = nextScale;
+  _view.ox = _well.width / 2 - _camera.cx * _view.scale;
+  _view.oy = _well.height / 2 - _camera.cy * _view.scale;
+}
+
+function resetWellView(){
+  const cfg = state ? state.cfg : WORLD;
+  _camera.zoom = 1;
+  _camera.cx = cfg.w / 2;
+  _camera.cy = cfg.h / 2;
+  updateViewTransform();
+}
+
+function panWellBy(clientDx, clientDy){
+  if (!_well || !_view.scale) return;
+  const rect = _well.getBoundingClientRect();
+  const px = clientDx * (_well.width / Math.max(1, rect.width));
+  const py = clientDy * (_well.height / Math.max(1, rect.height));
+  _camera.cx -= px / _view.scale;
+  _camera.cy -= py / _view.scale;
+  updateViewTransform();
+}
+
+function zoomWellAt(factor, clientX, clientY){
+  if (!_well || !Number.isFinite(factor) || factor <= 0) return;
+  const rect = _well.getBoundingClientRect();
+  const ax = clientX == null ? _well.width/2 : (clientX - (rect.left||0)) * (_well.width / Math.max(1,rect.width));
+  const ay = clientY == null ? _well.height/2 : (clientY - (rect.top||0)) * (_well.height / Math.max(1,rect.height));
+  const worldX = (ax - _view.ox) / _view.scale;
+  const worldY = (ay - _view.oy) / _view.scale;
+  const next = Math.max(VIEW_MIN_ZOOM, Math.min(VIEW_MAX_ZOOM, _camera.zoom * factor));
+  if (next === _camera.zoom) return;
+  const nextScale = _view.baseScale * next;
+  _camera.zoom = next;
+  _camera.cx = worldX - (ax - _well.width/2) / nextScale;
+  _camera.cy = worldY - (ay - _well.height/2) / nextScale;
+  updateViewTransform();
 }
 
 function hexToRgb(h){
@@ -2134,6 +2399,10 @@ function cladeColor(k){ return CLADE_COLORS[k % CLADE_COLORS.length]; }
      armour    -> plated dorsal arc
      venom     -> barb at the tail
      nocturnal -> pale eyeshine ring
+     carnivore -> forward teeth
+     claws     -> hooked forelimbs
+     camouflage -> mottled flank patches
+     pack      -> three dorsal group marks
 
    Drawn in local space (origin at the organism, +x along heading) and transformed by
    the caller, so the same routine serves the tiny well markers and the large specimen
@@ -2187,6 +2456,44 @@ function drawCreature(ctx, o, R, opts){
       ctx.lineTo(-bodyL * 1.5,  R * 0.30);
       ctx.closePath();
       ctx.fill();
+    }
+    // carnivore — forward teeth make the trophic role legible in the well/card
+    if (o.ad && o.ad.carnivore){
+      ctx.fillStyle = ADAPT_BY_KEY.carnivore.color;
+      for (const sy of [-1,1]){
+        ctx.beginPath();
+        ctx.moveTo(bodyL*0.82, sy*bodyW*0.18);
+        ctx.lineTo(bodyL*1.28, sy*bodyW*0.34);
+        ctx.lineTo(bodyL*0.92, sy*bodyW*0.52);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    // claws — paired hooked forelimbs behind the head
+    if (o.ad && o.ad.claws){
+      ctx.strokeStyle = ADAPT_BY_KEY.claws.color;
+      ctx.lineWidth = Math.max(0.55, R*0.13);
+      for (const sy of [-1,1]){
+        for (let n=0;n<3;n++){
+          const x=bodyL*(0.20+n*0.13), y=sy*bodyW*0.72;
+          ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+R*0.18,sy*bodyW*1.08); ctx.stroke();
+        }
+      }
+    }
+    // camouflage — irregular flank mottling, distinct from the solid diet hue
+    if (o.ad && o.ad.camouflage){
+      ctx.fillStyle = ADAPT_BY_KEY.camouflage.color;
+      ctx.globalAlpha = 0.58;
+      for (const p of [[-0.38,-0.28],[-0.08,0.32],[0.25,-0.20],[0.48,0.25]]){
+        ctx.beginPath(); ctx.arc(bodyL*p[0],bodyW*p[1],Math.max(0.45,R*0.13),0,Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    // pack hunting — a repeated group mark along the dorsal midline
+    if (o.ad && o.ad.pack){
+      ctx.fillStyle = ADAPT_BY_KEY.pack.color;
+      for (const x of [-0.28,0,0.28]){
+        ctx.beginPath(); ctx.arc(bodyL*x,-bodyW*0.58,Math.max(0.45,R*0.10),0,Math.PI*2); ctx.fill();
+      }
     }
     // eyes — forward-set, scaled by sense
     const eyeR = Math.max(0.5, R * (0.16 + tSense * 0.52));
@@ -2542,7 +2849,10 @@ function paintSpecies(){
         const f = cladeAdaptFrequency(c.id, a.key);
         if (f >= 0.5){
           const solid = f >= 0.85;
-          glyphs += `<span class="adGlyph" style="color:${a.color};opacity:${solid?1:0.55}" title="${a.name} — ${Math.round(f*100)}% of this clade">${a.glyph}</span>`;
+          const prevalence = `${Math.round(f*100)}% of this clade`;
+          const status = solid ? 'established' : 'spreading';
+          const tip = `${a.name}: ${a.blurb} ${prevalence}; ${status}.`;
+          glyphs += `<span class="adGlyph" tabindex="0" style="color:${a.color};opacity:${solid?1:0.55}" title="${a.name} — ${prevalence}" data-tip="${tip}" aria-label="${tip}">${a.glyph}</span>`;
         }
       }
     }
@@ -2612,7 +2922,19 @@ function drainEvents(){
   for (const ev of events){
     if (ev.type === 'speciation') showSpeciationToast(ev);
     else if (ev.type === 'merge') showMergeToast(ev);
+    else if (ev.type === 'adaptation') showAdaptationToast(ev);
   }
+}
+
+function showAdaptationToast(ev){
+  const host = $('toasts');
+  if (!host) return;
+  const el = document.createElement('div');
+  el.className = 'toast adaptation';
+  el.style.borderColor = ev.color || PAL.food;
+  el.innerHTML = `<b style="color:${ev.color||PAL.food}">${ev.glyph||''} ${ev.name} evolved</b> — the ${ev.lineage||'population'} lineage ${ev.message||'has a new heritable adaptation.'}`;
+  host.appendChild(el);
+  setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 5100);
 }
 function showSpeciationToast(ev){
   const host = $('toasts');
@@ -2687,8 +3009,14 @@ function paintReadouts(){
 function setRunning(on, auto){
   state.running = on;
   UI.autoPaused = !!(auto && !on);
-  const b = $('btnRun');
-  if (b){ b.textContent = on ? 'Pause' : 'Run'; b.setAttribute('aria-pressed', String(on)); }
+  for (const id of ['btnRun','btnViewRun']){
+    const b = $(id);
+    if (b){
+      b.textContent = on ? 'Pause' : 'Run';
+      b.title = on ? 'Pause simulation (Space)' : 'Resume simulation (Space)';
+      b.setAttribute('aria-pressed', String(on));
+    }
+  }
 }
 
 function restart(opts){
@@ -2700,6 +3028,7 @@ function restart(opts){
   const toastHost = $('toasts');
   if (toastHost) toastHost.innerHTML = '';   // a toast from the old run mid-animation would otherwise linger, naming a species that no longer exists
   if ($('seed')) $('seed').value = seed;
+  resetWellView();
   fitCanvases();
   buildScenarioButtons();
   buildSpeciesList();
@@ -2841,9 +3170,82 @@ function bindFullscreen(){
   }
 }
 
+/* ---------- Well navigation ----------
+   Pointer events cover mouse, pen, and touch with one path. One pointer drags; two
+   pointers pan and pinch around their shared midpoint. Wheel/buttons/keys call the
+   same camera helpers, so embedded and fullscreen behaviour cannot drift apart. */
+function bindWellNavigation(){
+  const well = $('well');
+  if (!well) return;
+  const pointers = new Map();
+  const point = e => ({ x:e.clientX, y:e.clientY });
+  const pairMetrics = values => {
+    const p = Array.from(values).slice(0,2);
+    return { x:(p[0].x+p[1].x)/2, y:(p[0].y+p[1].y)/2,
+             d:Math.hypot(p[1].x-p[0].x,p[1].y-p[0].y) };
+  };
+  const repaint = () => { drawWell(); };
+
+  well.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    pointers.set(e.pointerId, point(e));
+    if (well.setPointerCapture) well.setPointerCapture(e.pointerId);
+    well.classList.add('dragging');
+    e.preventDefault();
+  });
+  well.addEventListener('pointermove', e => {
+    if (!pointers.has(e.pointerId)) return;
+    const before = pointers.size >= 2 ? pairMetrics(pointers.values()) : null;
+    const old = pointers.get(e.pointerId);
+    pointers.set(e.pointerId, point(e));
+    if (pointers.size >= 2){
+      const after = pairMetrics(pointers.values());
+      panWellBy(after.x-before.x, after.y-before.y);
+      if (before.d > 0) zoomWellAt(after.d/before.d, after.x, after.y);
+    } else {
+      panWellBy(e.clientX-old.x, e.clientY-old.y);
+    }
+    repaint();
+    e.preventDefault();
+  });
+  const endPointer = e => {
+    pointers.delete(e.pointerId);
+    if (!pointers.size) well.classList.remove('dragging');
+  };
+  well.addEventListener('pointerup', endPointer);
+  well.addEventListener('pointercancel', endPointer);
+  well.addEventListener('wheel', e => {
+    zoomWellAt(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
+    repaint(); e.preventDefault();
+  }, { passive:false });
+  well.addEventListener('dblclick', () => { resetWellView(); repaint(); });
+  well.addEventListener('keydown', e => {
+    const pan = 36;
+    if (e.key === 'ArrowLeft') panWellBy(pan,0);
+    else if (e.key === 'ArrowRight') panWellBy(-pan,0);
+    else if (e.key === 'ArrowUp') panWellBy(0,pan);
+    else if (e.key === 'ArrowDown') panWellBy(0,-pan);
+    else if (e.key === '+' || e.key === '=') zoomWellAt(1.35);
+    else if (e.key === '-' || e.key === '_') zoomWellAt(1/1.35);
+    else if (e.key === '0') resetWellView();
+    else return;
+    repaint(); e.preventDefault();
+  });
+
+  const viewRun = $('btnViewRun');
+  if (viewRun) viewRun.onclick = () => setRunning(!state.running);
+  const zoomIn = $('btnZoomIn');
+  if (zoomIn) zoomIn.onclick = () => { zoomWellAt(1.35); repaint(); };
+  const zoomOut = $('btnZoomOut');
+  if (zoomOut) zoomOut.onclick = () => { zoomWellAt(1/1.35); repaint(); };
+  const reset = $('btnViewReset');
+  if (reset) reset.onclick = () => { resetWellView(); repaint(); };
+}
+
 function bindUI(){
   UI.els.run = $('btnRun');
   if (UI.els.run) UI.els.run.onclick = () => setRunning(!state.running);
+  bindWellNavigation();
 
   const reset = $('btnReset');
   if (reset) reset.onclick = () => restart({});

@@ -3,7 +3,9 @@
    the sim appears to have silently stopped for no reason. */
 let pass=0, fail=0; const check=(n,c)=>{ c?pass++:(fail++,console.log('FAIL:',n)); };
 
-const els = { btnRun:{ textContent:'', setAttribute(){} }, autopaused:{ hidden:true }, extinct:{ hidden:true } };
+const els = { btnRun:{ textContent:'', title:'', setAttribute(){} },
+              btnViewRun:{ textContent:'', title:'', setAttribute(){} },
+              autopaused:{ hidden:true }, extinct:{ hidden:true } };
 document.getElementById = (id) => els[id] || null;
 
 initWorld({seed:'ui', scenario:'temperate'});
@@ -11,6 +13,8 @@ initWorld({seed:'ui', scenario:'temperate'});
 /* --- visibilitychange-style auto-pause sets the flag --- */
 setRunning(true);
 check('starts running with no auto-pause flag', state.running === true && UI.autoPaused === false);
+check('side-panel and in-well controls both show Pause while running',
+      els.btnRun.textContent === 'Pause' && els.btnViewRun.textContent === 'Pause');
 setRunning(false, true);   // simulates document.hidden firing
 check('backgrounding sets running false', state.running === false);
 check('backgrounding sets the auto-pause flag', UI.autoPaused === true);
@@ -32,6 +36,8 @@ check('the banner hides again', els.autopaused.hidden === true);
 setRunning(true);
 setRunning(false);   // player presses Pause deliberately, no `auto` argument
 check('a manual pause does not set the auto-pause flag', UI.autoPaused === false);
+check('side-panel and in-well controls both show Run while paused',
+      els.btnRun.textContent === 'Run' && els.btnViewRun.textContent === 'Run');
 paintReadouts();
 check('the banner stays hidden for a manual pause', els.autopaused.hidden === true);
 
@@ -122,6 +128,15 @@ if (typeof require !== 'undefined'){
     const html = fs.readFileSync(require('path').join(process.cwd(), 'src', 'shell.html'), 'utf8');
     check('the CSS explicitly restores display:none when #aboutPanel is hidden (see the "why" comment above)',
           /#aboutPanel\[hidden\]\s*\{[^}]*display\s*:\s*none/.test(html));
+    check('the Specimens panel contains a visible legend for hue, size, speed, sense, and adaptation marks',
+          /class="specimenLegend"/.test(html) && /Body hue/.test(html) && /Body width/.test(html) &&
+          /Long body \+ tail/.test(html) && /Large eyes/.test(html) && /armour, venom, nocturnal, carnivore/.test(html) &&
+          /claws, camouflage, pack hunting/.test(html));
+    check('species adaptation icons expose a hover/focus explanation',
+          /\.adGlyph:hover::after/.test(html) && /\.adGlyph:focus-visible::after/.test(html));
+    check('the well exposes pause, zoom, reset, fullscreen, and pointer navigation in both layouts',
+          /id="btnViewRun"/.test(html) && /id="btnZoomOut"/.test(html) && /id="btnZoomIn"/.test(html) &&
+          /id="btnViewReset"/.test(html) && /id="btnFull"/.test(html) && /touch-action\s*:\s*none/.test(html));
   } catch(e){
     console.log('  (skipped CSS-source check: could not read src/shell.html from', process.cwd(), '—', e.message, ')');
   }

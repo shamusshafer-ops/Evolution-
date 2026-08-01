@@ -65,7 +65,10 @@ function paintSpecies(){
         const f = cladeAdaptFrequency(c.id, a.key);
         if (f >= 0.5){
           const solid = f >= 0.85;
-          glyphs += `<span class="adGlyph" style="color:${a.color};opacity:${solid?1:0.55}" title="${a.name} — ${Math.round(f*100)}% of this clade">${a.glyph}</span>`;
+          const prevalence = `${Math.round(f*100)}% of this clade`;
+          const status = solid ? 'established' : 'spreading';
+          const tip = `${a.name}: ${a.blurb} ${prevalence}; ${status}.`;
+          glyphs += `<span class="adGlyph" tabindex="0" style="color:${a.color};opacity:${solid?1:0.55}" title="${a.name} — ${prevalence}" data-tip="${tip}" aria-label="${tip}">${a.glyph}</span>`;
         }
       }
     }
@@ -135,7 +138,19 @@ function drainEvents(){
   for (const ev of events){
     if (ev.type === 'speciation') showSpeciationToast(ev);
     else if (ev.type === 'merge') showMergeToast(ev);
+    else if (ev.type === 'adaptation') showAdaptationToast(ev);
   }
+}
+
+function showAdaptationToast(ev){
+  const host = $('toasts');
+  if (!host) return;
+  const el = document.createElement('div');
+  el.className = 'toast adaptation';
+  el.style.borderColor = ev.color || PAL.food;
+  el.innerHTML = `<b style="color:${ev.color||PAL.food}">${ev.glyph||''} ${ev.name} evolved</b> — the ${ev.lineage||'population'} lineage ${ev.message||'has a new heritable adaptation.'}`;
+  host.appendChild(el);
+  setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 5100);
 }
 function showSpeciationToast(ev){
   const host = $('toasts');
@@ -210,8 +225,14 @@ function paintReadouts(){
 function setRunning(on, auto){
   state.running = on;
   UI.autoPaused = !!(auto && !on);
-  const b = $('btnRun');
-  if (b){ b.textContent = on ? 'Pause' : 'Run'; b.setAttribute('aria-pressed', String(on)); }
+  for (const id of ['btnRun','btnViewRun']){
+    const b = $(id);
+    if (b){
+      b.textContent = on ? 'Pause' : 'Run';
+      b.title = on ? 'Pause simulation (Space)' : 'Resume simulation (Space)';
+      b.setAttribute('aria-pressed', String(on));
+    }
+  }
 }
 
 function restart(opts){
@@ -223,6 +244,7 @@ function restart(opts){
   const toastHost = $('toasts');
   if (toastHost) toastHost.innerHTML = '';   // a toast from the old run mid-animation would otherwise linger, naming a species that no longer exists
   if ($('seed')) $('seed').value = seed;
+  resetWellView();
   fitCanvases();
   buildScenarioButtons();
   buildSpeciesList();
@@ -364,9 +386,82 @@ function bindFullscreen(){
   }
 }
 
+/* ---------- Well navigation ----------
+   Pointer events cover mouse, pen, and touch with one path. One pointer drags; two
+   pointers pan and pinch around their shared midpoint. Wheel/buttons/keys call the
+   same camera helpers, so embedded and fullscreen behaviour cannot drift apart. */
+function bindWellNavigation(){
+  const well = $('well');
+  if (!well) return;
+  const pointers = new Map();
+  const point = e => ({ x:e.clientX, y:e.clientY });
+  const pairMetrics = values => {
+    const p = Array.from(values).slice(0,2);
+    return { x:(p[0].x+p[1].x)/2, y:(p[0].y+p[1].y)/2,
+             d:Math.hypot(p[1].x-p[0].x,p[1].y-p[0].y) };
+  };
+  const repaint = () => { drawWell(); };
+
+  well.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    pointers.set(e.pointerId, point(e));
+    if (well.setPointerCapture) well.setPointerCapture(e.pointerId);
+    well.classList.add('dragging');
+    e.preventDefault();
+  });
+  well.addEventListener('pointermove', e => {
+    if (!pointers.has(e.pointerId)) return;
+    const before = pointers.size >= 2 ? pairMetrics(pointers.values()) : null;
+    const old = pointers.get(e.pointerId);
+    pointers.set(e.pointerId, point(e));
+    if (pointers.size >= 2){
+      const after = pairMetrics(pointers.values());
+      panWellBy(after.x-before.x, after.y-before.y);
+      if (before.d > 0) zoomWellAt(after.d/before.d, after.x, after.y);
+    } else {
+      panWellBy(e.clientX-old.x, e.clientY-old.y);
+    }
+    repaint();
+    e.preventDefault();
+  });
+  const endPointer = e => {
+    pointers.delete(e.pointerId);
+    if (!pointers.size) well.classList.remove('dragging');
+  };
+  well.addEventListener('pointerup', endPointer);
+  well.addEventListener('pointercancel', endPointer);
+  well.addEventListener('wheel', e => {
+    zoomWellAt(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
+    repaint(); e.preventDefault();
+  }, { passive:false });
+  well.addEventListener('dblclick', () => { resetWellView(); repaint(); });
+  well.addEventListener('keydown', e => {
+    const pan = 36;
+    if (e.key === 'ArrowLeft') panWellBy(pan,0);
+    else if (e.key === 'ArrowRight') panWellBy(-pan,0);
+    else if (e.key === 'ArrowUp') panWellBy(0,pan);
+    else if (e.key === 'ArrowDown') panWellBy(0,-pan);
+    else if (e.key === '+' || e.key === '=') zoomWellAt(1.35);
+    else if (e.key === '-' || e.key === '_') zoomWellAt(1/1.35);
+    else if (e.key === '0') resetWellView();
+    else return;
+    repaint(); e.preventDefault();
+  });
+
+  const viewRun = $('btnViewRun');
+  if (viewRun) viewRun.onclick = () => setRunning(!state.running);
+  const zoomIn = $('btnZoomIn');
+  if (zoomIn) zoomIn.onclick = () => { zoomWellAt(1.35); repaint(); };
+  const zoomOut = $('btnZoomOut');
+  if (zoomOut) zoomOut.onclick = () => { zoomWellAt(1/1.35); repaint(); };
+  const reset = $('btnViewReset');
+  if (reset) reset.onclick = () => { resetWellView(); repaint(); };
+}
+
 function bindUI(){
   UI.els.run = $('btnRun');
   if (UI.els.run) UI.els.run.onclick = () => setRunning(!state.running);
+  bindWellNavigation();
 
   const reset = $('btnReset');
   if (reset) reset.onclick = () => restart({});

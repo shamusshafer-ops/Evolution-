@@ -14,6 +14,14 @@ const VERSION = '0.1.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-08-01', tag:'ecology', title:'A richer evolutionary arms race',
+    text:'The new Arms Race scenario adds three visible, binary, heritable adaptations without changing the measured Food Chain run. Claws reduce a prey’s chance to escape but cost upkeep. Camouflage shrinks predator detection range but slows movement. Pack hunters can combine the effective size of nearby cooperating predators, but the gene costs upkeep and gives a lone carrier nothing. Each first appearance is announced.' },
+  { date:'2026-08-01', tag:'ui', title:'The specimen well is navigable',
+    text:'Drag to pan and use the wheel, pinch gesture, +/− buttons, or keyboard to zoom up to 8×. The camera stays on the same location when fullscreen opens or closes. Pause/Run is now available directly over the well in both views; double-click, 1:1, or the 0 key resets the camera.' },
+  { date:'2026-08-01', tag:'ecology', title:'Carnivory can evolve',
+    text:'The Food Chain scenario starts with prey only. A binary carnivore gene can arise by mutation and is inherited by descendants: carriers grow visible forward teeth, can hunt non-carnivores, and cannot digest environmental food. That strict tradeoff keeps predators self-limiting instead of turning carnivory into a free upgrade. A one-time toast announces the first predator birth. Across three 30,000-tick runs, predators and prey coexist while carnivores remain a small minority and produce hundreds of kills.' },
+  { date:'2026-08-01', tag:'M10', title:'Learning gets an ecology — partial genetic assimilation measured',
+    text:'The Baldwin scenario now supplies frequent, usually survivable predator near-misses without changing the shared predation rules. Across three seeds, encounters rose from under 0.5 to roughly 10–16 per lifetime; learned escape skill became meaningful first, then innate wariness overtook it in every run by 75,000 ticks. Plasticity remains common, so the measured result is partial genetic assimilation, not complete replacement. M5 predation and every earlier scenario retain their original constants.' },
   { date:'2026-07-30', tag:'M10', title:'Learning — mechanism built, headline result not yet reached',
     text:'Two new traits: wariness (innate escape ability, present at birth) and plasticity (how fast an organism learns to escape from surviving a predator). Both cost neural upkeep, plasticity 2.5x more, because a plastic nervous system really is pricier to run than a hardwired one. Scoped as an experiment in the Baldwin effect — genetic assimilation, where a learned behaviour gets replaced by an inherited one once it is reliably useful — and honestly: that has not happened yet. Wariness rises under ordinary selection (0.09 → 0.23 over 30,000 ticks), but the learned component stays negligible, because a typical organism experiences under half a predation encounter in its entire life. Not enough experience to learn from. Documented as a known gap rather than hidden — see AGENTS.md for what a fix would need.' },
   { date:'2026-07-30', tag:'ui', title:'Fullscreen',
@@ -353,6 +361,45 @@ const ADAPTATIONS = [
     costCoef: 0, costExp: 0, senseMul: 0.62,
     blurb:'Forages at night, competing only with other nocturnals. Sees less well in the dark. Being the rare phase is the advantage, so this should hold a stable mix rather than take over.'
   },
+  {
+    key:'carnivore', name:'Carnivore', short:'CAR', color:'#F06A4F', glyph:'▲',
+    enabledBy:'carnivory', notify:true,
+    /* Obligate carnivory is paid for through opportunity rather than a flat upkeep:
+       carriers cannot digest environmental food at all. They must catch prey. This
+       makes the benefit frequency-dependent — powerful while prey are abundant,
+       self-limiting when predators become common. */
+    costCoef:0, costExp:0,
+    emergence:'can now hunt prey but must live on prey alone.',
+    blurb:'Can hunt other organisms but cannot digest environmental food. Heritable and self-limiting: predators prosper only while enough prey remain.'
+  },
+  {
+    key:'claws', name:'Claws', short:'CLW', color:'#F2C14E', glyph:'⟑',
+    enabledBy:'advancedAdaptations', notify:true,
+    /* Claws improve grip during the strike, reducing escape rather than bypassing
+       the size gate (venom already owns that niche). Keratin is cheap; maintaining
+       the muscle and structure that uses it is not, hence a small flat upkeep. */
+    costCoef:0.014, costExp:0, captureMul:0.58,
+    emergence:'can hold fleeing prey more effectively.',
+    blurb:'Reduces prey escape odds during a strike. Costs constant upkeep and gives non-predators no benefit.'
+  },
+  {
+    key:'camouflage', name:'Camouflage', short:'CAM', color:'#75B798', glyph:'◌',
+    enabledBy:'advancedAdaptations', notify:true,
+    /* Crypsis works by remaining inconspicuous. Moving slowly is the opportunity
+       cost: it reduces both food-search displacement and speed-based escape. */
+    costCoef:0, costExp:0, detectMul:0.56, moveMul:0.82,
+    emergence:'is harder for predators to detect.',
+    blurb:'Predators must get much closer to detect a carrier, but cryptic movement is slower while foraging and escaping.'
+  },
+  {
+    key:'pack', name:'Pack hunting', short:'PCK', color:'#E58C62', glyph:'⧉',
+    enabledBy:'advancedAdaptations', notify:true,
+    /* Cooperation is deliberately frequency-dependent: a lone carrier pays the
+       signalling/coordination cost and receives no hunting bonus. */
+    costCoef:0.012, costExp:0, radius:48, sizePerAlly:0.34, maxAllies:2,
+    emergence:'can cooperate with nearby pack hunters.',
+    blurb:'Nearby carnivore carriers combine enough force to tackle larger prey. A lone carrier still pays coordination upkeep and gains nothing.'
+  },
 ];
 const ADAPT_KEYS = ADAPTATIONS.map(a => a.key);
 const ADAPT_BY_KEY = {};
@@ -537,10 +584,28 @@ const SCENARIOS = [
   { id:'wild',      name:'Wild',       blurb:'Everything at once: predators, day and night, and all three adaptations in play. Armour, venom and nocturnality each pay off only under the right conditions.',
     patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34, predation:true, adaptations:true, dayNight:true } },
 
-  /* The Baldwin experiment. Identical to Predation in every respect except that
-     organisms can learn, so any difference in outcome is learning and nothing else. */
-  { id:'baldwin',   name:'Baldwin',    blurb:'Predators, and organisms that learn to escape them. Watch innate wariness slowly replace learned skill — behaviour that had to be learned becoming inherited.',
-    patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34, predation:true, learning:true } },
+  /* Obligate predators arise by mutation from the founding herbivore population.
+     Only carnivore carriers may hunt, and they cannot eat environmental food. */
+  { id:'foodchain', name:'Food Chain', blurb:'Carnivory can evolve: predators eat organisms but cannot eat environmental food. Their own success depends on leaving enough prey alive.',
+    patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34,
+      predation:true, adaptations:true, carnivory:true, predationReachMul:5.0,
+      predationSizeRatio:1.10, predationMinPreySize:0.35 } },
+
+  /* Controlled twin of Food Chain. The extra flag keeps three additional genes —
+     and their inheritance RNG draws — completely out of that measured scenario. */
+  { id:'armsrace', name:'Arms Race', blurb:'Food Chain plus claws, camouflage, and cooperative pack hunting. Every advantage carries a cost, and each new adaptation announces itself.',
+    patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34,
+      predation:true, adaptations:true, carnivory:true, advancedAdaptations:true,
+      predationReachMul:5.0, predationSizeRatio:1.10, predationMinPreySize:0.35 } },
+
+  /* The Baldwin experiment needs frequent, survivable experience rather than M5's
+     rare lethal kills. These overrides belong to this scenario only: the shared
+     PREDATION constants and their measured bistability remain untouched. */
+  { id:'baldwin',   name:'Baldwin',    blurb:'Frequent predator near-misses give organisms a chance to learn. Watch whether costly plasticity opens the path for cheaper innate wariness.',
+    patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34,
+      predation:true, learning:true, predationReachMul:9.0, predationSizeRatio:1.05,
+      predationMinPreySize:0, predationCooldown:40, predationAttemptCooldown:40,
+      predationLethality:0.08 } },
 
   { id:'predation', name:'Predation',  blurb:'Same food as Temperate, but large organisms can eat smaller ones. Size finally buys something proportional to what it costs.',
     patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34, predation:true } },

@@ -4,7 +4,9 @@
    ========================================================================== */
 
 let _well = null, _wellCtx = null, _ribbon = null, _ribbonCtx = null;
-let _view = { scale:1, ox:0, oy:0 };
+let _view = { scale:1, baseScale:1, ox:0, oy:0 };
+let _camera = { zoom:1, cx:null, cy:null };
+const VIEW_MIN_ZOOM = 1, VIEW_MAX_ZOOM = 8;
 
 function initRender(){
   _well   = document.getElementById('well');
@@ -27,10 +29,62 @@ function fitCanvases(){
     c.height = Math.max(1, Math.round(r.height * dpr));
   }
   const cfg = state ? state.cfg : WORLD;
-  const s = Math.min(_well.width / cfg.w, _well.height / cfg.h);
-  _view.scale = s;
-  _view.ox = (_well.width  - cfg.w * s) / 2;
-  _view.oy = (_well.height - cfg.h * s) / 2;
+  _view.baseScale = Math.min(_well.width / cfg.w, _well.height / cfg.h);
+  if (!Number.isFinite(_camera.cx)) _camera.cx = cfg.w / 2;
+  if (!Number.isFinite(_camera.cy)) _camera.cy = cfg.h / 2;
+  updateViewTransform();
+}
+
+/* ---------- Well camera ----------
+   Camera position is stored in WORLD coordinates, rather than canvas pixels. That
+   makes the view survive a backing-store resize when entering or leaving fullscreen:
+   the same organism remains centred even though the number of screen pixels changes. */
+function updateViewTransform(){
+  if (!_well) return;
+  const cfg = state ? state.cfg : WORLD;
+  _camera.zoom = Math.max(VIEW_MIN_ZOOM, Math.min(VIEW_MAX_ZOOM, _camera.zoom || 1));
+  const nextScale = _view.baseScale * _camera.zoom;
+  const halfW = Math.min(cfg.w/2, _well.width / (2*nextScale));
+  const halfH = Math.min(cfg.h/2, _well.height / (2*nextScale));
+  _camera.cx = Math.max(halfW, Math.min(cfg.w - halfW, Number.isFinite(_camera.cx) ? _camera.cx : cfg.w/2));
+  _camera.cy = Math.max(halfH, Math.min(cfg.h - halfH, Number.isFinite(_camera.cy) ? _camera.cy : cfg.h/2));
+  _view.scale = nextScale;
+  _view.ox = _well.width / 2 - _camera.cx * _view.scale;
+  _view.oy = _well.height / 2 - _camera.cy * _view.scale;
+}
+
+function resetWellView(){
+  const cfg = state ? state.cfg : WORLD;
+  _camera.zoom = 1;
+  _camera.cx = cfg.w / 2;
+  _camera.cy = cfg.h / 2;
+  updateViewTransform();
+}
+
+function panWellBy(clientDx, clientDy){
+  if (!_well || !_view.scale) return;
+  const rect = _well.getBoundingClientRect();
+  const px = clientDx * (_well.width / Math.max(1, rect.width));
+  const py = clientDy * (_well.height / Math.max(1, rect.height));
+  _camera.cx -= px / _view.scale;
+  _camera.cy -= py / _view.scale;
+  updateViewTransform();
+}
+
+function zoomWellAt(factor, clientX, clientY){
+  if (!_well || !Number.isFinite(factor) || factor <= 0) return;
+  const rect = _well.getBoundingClientRect();
+  const ax = clientX == null ? _well.width/2 : (clientX - (rect.left||0)) * (_well.width / Math.max(1,rect.width));
+  const ay = clientY == null ? _well.height/2 : (clientY - (rect.top||0)) * (_well.height / Math.max(1,rect.height));
+  const worldX = (ax - _view.ox) / _view.scale;
+  const worldY = (ay - _view.oy) / _view.scale;
+  const next = Math.max(VIEW_MIN_ZOOM, Math.min(VIEW_MAX_ZOOM, _camera.zoom * factor));
+  if (next === _camera.zoom) return;
+  const nextScale = _view.baseScale * next;
+  _camera.zoom = next;
+  _camera.cx = worldX - (ax - _well.width/2) / nextScale;
+  _camera.cy = worldY - (ay - _well.height/2) / nextScale;
+  updateViewTransform();
 }
 
 function hexToRgb(h){
@@ -56,6 +110,10 @@ function cladeColor(k){ return CLADE_COLORS[k % CLADE_COLORS.length]; }
      armour    -> plated dorsal arc
      venom     -> barb at the tail
      nocturnal -> pale eyeshine ring
+     carnivore -> forward teeth
+     claws     -> hooked forelimbs
+     camouflage -> mottled flank patches
+     pack      -> three dorsal group marks
 
    Drawn in local space (origin at the organism, +x along heading) and transformed by
    the caller, so the same routine serves the tiny well markers and the large specimen
@@ -109,6 +167,44 @@ function drawCreature(ctx, o, R, opts){
       ctx.lineTo(-bodyL * 1.5,  R * 0.30);
       ctx.closePath();
       ctx.fill();
+    }
+    // carnivore — forward teeth make the trophic role legible in the well/card
+    if (o.ad && o.ad.carnivore){
+      ctx.fillStyle = ADAPT_BY_KEY.carnivore.color;
+      for (const sy of [-1,1]){
+        ctx.beginPath();
+        ctx.moveTo(bodyL*0.82, sy*bodyW*0.18);
+        ctx.lineTo(bodyL*1.28, sy*bodyW*0.34);
+        ctx.lineTo(bodyL*0.92, sy*bodyW*0.52);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    // claws — paired hooked forelimbs behind the head
+    if (o.ad && o.ad.claws){
+      ctx.strokeStyle = ADAPT_BY_KEY.claws.color;
+      ctx.lineWidth = Math.max(0.55, R*0.13);
+      for (const sy of [-1,1]){
+        for (let n=0;n<3;n++){
+          const x=bodyL*(0.20+n*0.13), y=sy*bodyW*0.72;
+          ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+R*0.18,sy*bodyW*1.08); ctx.stroke();
+        }
+      }
+    }
+    // camouflage — irregular flank mottling, distinct from the solid diet hue
+    if (o.ad && o.ad.camouflage){
+      ctx.fillStyle = ADAPT_BY_KEY.camouflage.color;
+      ctx.globalAlpha = 0.58;
+      for (const p of [[-0.38,-0.28],[-0.08,0.32],[0.25,-0.20],[0.48,0.25]]){
+        ctx.beginPath(); ctx.arc(bodyL*p[0],bodyW*p[1],Math.max(0.45,R*0.13),0,Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    // pack hunting — a repeated group mark along the dorsal midline
+    if (o.ad && o.ad.pack){
+      ctx.fillStyle = ADAPT_BY_KEY.pack.color;
+      for (const x of [-0.28,0,0.28]){
+        ctx.beginPath(); ctx.arc(bodyL*x,-bodyW*0.58,Math.max(0.45,R*0.10),0,Math.PI*2); ctx.fill();
+      }
     }
     // eyes — forward-set, scaled by sense
     const eyeR = Math.max(0.5, R * (0.16 + tSense * 0.52));

@@ -67,10 +67,11 @@ function makeState(opts){
     nextLineageId: 0,      // monotonic; a lineage id is never reused, so ancestry stays unambiguous
     lineageOf: new Map(),  // organism id -> lineage id, as of the last computeSpecies() call
     events: [],            // queued notifications for the UI to drain (speciation, etc.)
+    adaptationsSeen: {},   // one-time emergence notifications, reset with each run
     foodCarry: 0,
     running: false,
     speedMult: 1,
-    stats: { born:0, starved:0, aged:0, eaten:0, peakPop:0, unmated:0, culled:0, predated:0, escapes:0 },
+    stats: { born:0, starved:0, aged:0, eaten:0, peakPop:0, unmated:0, culled:0, predated:0, escapes:0, predationAttempts:0, nearMisses:0 },
     history: [],          // per-sample trait means
     ribbon: [],           // per-sample trait HISTOGRAMS, for the drift ribbon
     sampleEvery: 30,
@@ -121,10 +122,21 @@ function escapeAbility(o){
 function adaptationCost(o){
   let c = 0;
   for (const a of ADAPTATIONS){
+    if (a.enabledBy && !state.cfg[a.enabledBy]) continue;
     if (!o.ad || !o.ad[a.key] || !a.costCoef) continue;
     c += a.costExp ? a.costCoef * Math.pow(massOf(o), a.costExp) : a.costCoef;
   }
   return c;
+}
+
+/* Camouflage is paid through opportunity rather than metabolism: moving cautiously
+   preserves concealment, but covers less ground and also supplies less raw speed in
+   an escape. Gated so an invented carrier cannot affect an older scenario. */
+function movementSpeed(o){
+  if (state.cfg.advancedAdaptations && o.ad && o.ad.camouflage){
+    return o.speed * ADAPT_BY_KEY.camouflage.moveMul;
+  }
+  return o.speed;
 }
 
 /* Sense is degraded at night for a nocturnal forager — it is dark. This is the cost
@@ -312,6 +324,9 @@ function wrapDelta(d, span){
 
 function findFood(o, fg){
   const cfg = state.cfg;
+  // Obligate carnivores trade the entire environmental-food channel for access to
+  // prey. That opportunity cost is what keeps carnivory from being a free upgrade.
+  if (cfg.carnivory && o.ad && o.ad.carnivore) return -1;
   const sense = effectiveSense(o);
   const reach = Math.ceil(sense / fg.cell);
   const cx = clamp(Math.floor(o.x / fg.cell), 0, fg.cols-1);
@@ -395,7 +410,9 @@ function reproduceSexual(a, b){
   // appearing or vanishing is a much bigger event than a continuous nudge.
   const childAdapt = {};
   if (state.cfg.adaptations){
-    for (const k of ADAPT_KEYS){
+    for (const def of ADAPTATIONS){
+      if (def.enabledBy && !state.cfg[def.enabledBy]) continue;
+      const k = def.key;
       let v = (rnd() < 0.5) ? !!a.ad[k] : !!b.ad[k];
       if (rnd() < ADAPT_MUTATE) v = !v;
       childAdapt[k] = v;
@@ -413,6 +430,7 @@ function reproduceSexual(a, b){
   child.energy = giveA + giveB;
   child.dir = rnd() * Math.PI * 2;
   state.organisms.push(child);
+  detectAdaptationEmergence(child, a);
   state.stats.born++;
   if (child.gen > state.generation) state.generation = child.gen;
   return child;
@@ -505,8 +523,9 @@ function step(){
     }
 
     /* --- move --- */
-    o.x += Math.cos(o.dir) * o.speed;
-    o.y += Math.sin(o.dir) * o.speed;
+    const moveSpeed = movementSpeed(o);
+    o.x += Math.cos(o.dir) * moveSpeed;
+    o.y += Math.sin(o.dir) * moveSpeed;
     if (cfg.wrap){
       o.x = ((o.x % cfg.w) + cfg.w) % cfg.w;
       o.y = ((o.y % cfg.h) + cfg.h) % cfg.h;
@@ -604,17 +623,47 @@ function traitHistogram(key, bins){
    starve can still be eaten — its energy goes to the predator rather than
    evaporating — which is both more realistic and avoids a strange edge case where
    starving organisms become magically unhuntable in their final tick. */
+function effectivePackSize(pred, allies){
+  if (!state.cfg.advancedAdaptations || !pred.ad || !pred.ad.carnivore || !pred.ad.pack) return pred.size;
+  const def=ADAPT_BY_KEY.pack;
+  return pred.size * (1 + Math.min(def.maxAllies,Math.max(0,allies||0)) * def.sizePerAlly);
+}
+
+function camouflageDetectionMul(prey){
+  return state.cfg.advancedAdaptations && prey.ad && prey.ad.camouflage
+    ? ADAPT_BY_KEY.camouflage.detectMul : 1;
+}
+
+function predationEscapeChance(pred, prey){
+  const predSpeed=movementSpeed(pred), preySpeed=movementSpeed(prey);
+  const speedAdv=(preySpeed-predSpeed)/Math.max(0.001,predSpeed);
+  let chance=clamp(speedAdv*PREDATION.escapeMul,0,0.95);
+  chance=clamp(chance+escapeAbility(prey)*LEARNING.escapeWeight,0,0.95);
+  if (state.cfg.advancedAdaptations && pred.ad && pred.ad.claws){
+    chance *= ADAPT_BY_KEY.claws.captureMul;
+  }
+  return chance;
+}
+
 function predationPass(){
   const cfg = state.cfg;
   if (!cfg.predation) return;
   const pop = state.organisms;
   if (pop.length < 2) return;
 
+  // Scenario overrides support ecologies that ask a different question from M5's
+  // rare, lethal size contest. Undefined fields fall back to the original constants,
+  // preserving every previously measured predation scenario exactly.
+  const reachMul = cfg.predationReachMul == null ? PREDATION.reachMul : cfg.predationReachMul;
+  const sizeRatio = cfg.predationSizeRatio == null ? PREDATION.sizeRatio : cfg.predationSizeRatio;
+  const minPreySize = cfg.predationMinPreySize == null ? PREDATION.minPreySize : cfg.predationMinPreySize;
+  const killCooldown = cfg.predationCooldown == null ? PREDATION.cooldown : cfg.predationCooldown;
+
   // Cell sized to the largest plausible strike range so a predator's targets are
   // always within the 3x3 neighbourhood.
   let maxReach = 0;
   for (const o of pop){
-    const r = o.size * PREDATION.reachMul;
+    const r = o.size * reachMul;
     if (r > maxReach) maxReach = r;
   }
   const cell = Math.max(8, maxReach);
@@ -630,11 +679,43 @@ function predationPass(){
 
   const eaten = new Uint8Array(pop.length);
 
+  function nearbyPackAllies(pred, predIndex){
+    if (!cfg.advancedAdaptations || !pred.ad || !pred.ad.carnivore || !pred.ad.pack) return 0;
+    const def = ADAPT_BY_KEY.pack;
+    const cells = Math.ceil(def.radius / cell);
+    const pcx = clamp(Math.floor(pred.x/cell),0,cols-1);
+    const pcy = clamp(Math.floor(pred.y/cell),0,rows-1);
+    const seen = new Set();
+    let allies = 0;
+    for (let gy=pcy-cells; gy<=pcy+cells; gy++){
+      for (let gx=pcx-cells; gx<=pcx+cells; gx++){
+        let ax=gx, ay=gy;
+        if (cfg.wrap){ ax=((gx%cols)+cols)%cols; ay=((gy%rows)+rows)%rows; }
+        else if (gx<0||gy<0||gx>=cols||gy>=rows) continue;
+        const bucket=grid.get(ay*cols+ax); if (!bucket) continue;
+        for (const j of bucket){
+          if (j===predIndex || eaten[j] || seen.has(j)) continue;
+          seen.add(j);
+          const ally=pop[j];
+          if (!ally.ad || !ally.ad.carnivore || !ally.ad.pack) continue;
+          const dx=wrapDelta(ally.x-pred.x,cfg.w), dy=wrapDelta(ally.y-pred.y,cfg.h);
+          if (dx*dx+dy*dy <= def.radius*def.radius && ++allies >= def.maxAllies) return allies;
+        }
+      }
+    }
+    return allies;
+  }
+
   for (let i = 0; i < pop.length; i++){
     if (eaten[i]) continue;                       // a corpse cannot hunt
     const pred = pop[i];
+    // In Food Chain, hunting is a heritable ecological role rather than something
+    // every sufficiently large organism can do. Other scenarios retain M5's rules.
+    if (cfg.carnivory && !(pred.ad && pred.ad.carnivore)) continue;
     if (pred.predCooldown > 0){ continue; }
-    const reach = pred.size * PREDATION.reachMul;
+    const reach = pred.size * reachMul;
+    const packAllies = nearbyPackAllies(pred, i);
+    const effectiveSize = effectivePackSize(pred, packAllies);
     const cx = clamp(Math.floor(pred.x/cell),0,cols-1);
     const cy = clamp(Math.floor(pred.y/cell),0,rows-1);
 
@@ -649,6 +730,9 @@ function predationPass(){
         for (const j of bucket){
           if (j === i || eaten[j]) continue;
           const prey = pop[j];
+          // Food Chain separates trophic roles cleanly: carnivores hunt the
+          // non-carnivore prey guild, not one another.
+          if (cfg.carnivory && prey.ad && prey.ad.carnivore) continue;
           // Armour: cannot be eaten at all. The single clearest conditional benefit
           // in the model — decisive where predation exists, dead weight where it
           // does not, which is exactly the stickleback armour-loss story.
@@ -656,13 +740,15 @@ function predationPass(){
           // Size gate: predators are meaningfully larger, not marginally — UNLESS the
           // predator is venomous, which is the whole point of venom: it buys entry to
           // the predator niche without paying for a large body.
-          if (!(pred.ad && pred.ad.venom) && pred.size < prey.size * PREDATION.sizeRatio) continue;
+          if (!(pred.ad && pred.ad.venom) && effectiveSize < prey.size * sizeRatio) continue;
           // Profitability gate (optimal foraging): very small prey are not worth
           // the handling cost. This is the size refuge — see PREDATION.minPreySize.
-          if (prey.size < PREDATION.minPreySize) continue;
+          if (prey.size < minPreySize) continue;
           const dx = wrapDelta(prey.x - pred.x, cfg.w);
           const dy = wrapDelta(prey.y - pred.y, cfg.h);
           const d2 = dx*dx + dy*dy;
+          const visibleReach=reach*camouflageDetectionMul(prey);
+          if (d2 > visibleReach*visibleReach) continue;
           if (d2 < bestD2){ bestD2 = d2; target = j; }
         }
       }
@@ -670,17 +756,22 @@ function predationPass(){
 
     if (target < 0) continue;
     const prey = pop[target];
+    state.stats.predationAttempts = (state.stats.predationAttempts||0) + 1;
 
     /* Escape. A prey faster than its pursuer frequently gets away; a slower one
        rarely does. Without this, size would be strictly dominant and the arms race
        would collapse into a size runaway — the escape term is what keeps speed
        worth paying for and keeps the tradeoff two-sided. */
-    const speedAdv = (prey.speed - pred.speed) / Math.max(0.001, pred.speed);
-    let pEscape = clamp(speedAdv * PREDATION.escapeMul, 0, 0.95);
-    // Escape ability (innate wariness + learned skill) adds to the speed-based odds.
-    pEscape = clamp(pEscape + escapeAbility(prey) * LEARNING.escapeWeight, 0, 0.95);
-    if (rnd() < pEscape){
-      state.stats.escapes = (state.stats.escapes||0) + 1;
+    // Escape ability combines movement, learned/innate avoidance, and any claw grip.
+    const pEscape = predationEscapeChance(pred, prey);
+    const escaped = rnd() < pEscape;
+    // In the Baldwin ecology an unsuccessful dodge is usually still a survivable
+    // near-miss. That supplies experience without making learning a free survival
+    // guarantee: repeated failures still accumulate real mortality risk.
+    const nearMiss = !escaped && cfg.predationLethality != null && rnd() >= cfg.predationLethality;
+    if (escaped || nearMiss){
+      if (escaped) state.stats.escapes = (state.stats.escapes||0) + 1;
+      else state.stats.nearMisses = (state.stats.nearMisses||0) + 1;
       // Surviving a near-miss is the learning event. Gain is a fraction of REMAINING
       // headroom, so skill rises fast at first and plateaus — diminishing returns,
       // which is how skill acquisition actually behaves.
@@ -689,12 +780,13 @@ function predationPass(){
         if (head > 0) prey.learned += head * LEARNING.gainPerEscape * prey.plasticity;
       }
       prey.escapes = (prey.escapes || 0) + 1;
+      if (cfg.predationAttemptCooldown != null) pred.predCooldown = cfg.predationAttemptCooldown;
       continue;
     }
 
     eaten[target] = 1;
     pred.energy += prey.energy * PREDATION.efficiency;
-    pred.predCooldown = PREDATION.cooldown;
+    pred.predCooldown = killCooldown;
     pred.kills = (pred.kills || 0) + 1;
     state.stats.predated = (state.stats.predated || 0) + 1;
   }
@@ -703,6 +795,24 @@ function predationPass(){
     const keep = [];
     for (let i = 0; i < pop.length; i++) if (!eaten[i]) keep.push(pop[i]);
     state.organisms = keep;
+  }
+}
+
+/* Notify at the first live birth carrying a scenario-specific adaptation. Founders
+   begin without adaptations, so in a real run this is the mutation event itself.
+   The flag is per-run and prevents inherited descendants from spamming the player. */
+function detectAdaptationEmergence(child, parent){
+  if (!child.ad) return;
+  for (const def of ADAPTATIONS){
+    if (!def.notify || !child.ad[def.key]) continue;
+    if (def.enabledBy && !state.cfg[def.enabledBy]) continue;
+    if (state.adaptationsSeen[def.key]) continue;
+    state.adaptationsSeen[def.key] = true;
+    state.events.push({
+      type:'adaptation', tick:state.tick, key:def.key, name:def.name,
+      glyph:def.glyph, color:def.color, message:def.emergence || 'has appeared.',
+      lineage:cladeName(parent && parent.clade != null ? parent.clade : child.clade),
+    });
   }
 }
 

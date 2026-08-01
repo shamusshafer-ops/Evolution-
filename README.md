@@ -10,6 +10,10 @@ Tap the **?** button for an in-app explainer (how to read the three views, what 
 trait costs and why, which scenarios to try) and a live changelog of every change
 that's altered what the sim does.
 
+Drag the specimen well to pan; wheel or pinch to zoom. The overlaid controls provide
+Pause/Run, zoom, view reset, and fullscreen without leaving the well. Arrow keys pan,
+`+`/`-` zoom, and `0` resets the camera.
+
 ## The model
 
 Three heritable traits, each with a real metabolic price:
@@ -100,6 +104,20 @@ no geography required):
 | | Rate (10 seeds, 40k ticks) | Geographic sorting |
 |---|---|---|
 | Archipelago | 7/10 | mean 0.752 (1.0 = perfect sorting by side) |
+
+## Predator–prey evolution
+
+The **Food Chain** scenario begins with prey only. Carnivory is a binary heritable
+adaptation that can arise by mutation: carriers can hunt non-carnivores but cannot
+digest environmental food. Predators therefore depend on keeping a prey population
+alive. The first carnivore birth is announced, and forward teeth make the new role
+visible in both the well and specimen view.
+
+The **Arms Race** scenario keeps that food web and adds three more heritable strategies:
+claws hold fleeing prey, camouflage hides prey at the cost of slower movement, and
+pack hunters combine their effective size when cooperating nearby. All three have
+distinct specimen morphology, species glyphs with explanations, and first-emergence
+notifications. They are isolated from Food Chain so its measured result stays intact.
 
 ## Determinism
 

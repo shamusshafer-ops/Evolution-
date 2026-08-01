@@ -23,6 +23,28 @@ globalThis.devicePixelRatio = 2;
 
 initWorld({seed:'render', scenario:'oasis'});
 check('initRender succeeds with canvases present', initRender()===true);
+check('well camera starts at the fitted 1x view', _camera.zoom === 1);
+
+/* Camera maths is tested independently of browser pointer dispatch. In particular,
+   zooming must hold the world point under the cursor still; otherwise every wheel
+   notch makes the object being inspected slide away from the pointer. */
+const clientAnchorX=225, clientAnchorY=155;
+const anchorX=clientAnchorX*(wells.well.width/900), anchorY=clientAnchorY*(wells.well.height/620);
+const worldBeforeZoom={ x:(anchorX-_view.ox)/_view.scale, y:(anchorY-_view.oy)/_view.scale };
+zoomWellAt(2,clientAnchorX,clientAnchorY);
+const worldAfterZoom={ x:(anchorX-_view.ox)/_view.scale, y:(anchorY-_view.oy)/_view.scale };
+check('zoom changes camera magnification', _camera.zoom === 2);
+check('zoom remains anchored under the cursor',
+      Math.abs(worldBeforeZoom.x-worldAfterZoom.x)<1e-9 && Math.abs(worldBeforeZoom.y-worldAfterZoom.y)<1e-9);
+const cxBeforePan=_camera.cx;
+panWellBy(45,0);
+check('dragging pans the camera in world space', _camera.cx < cxBeforePan);
+zoomWellAt(100);
+check('zoom is capped at 8x', _camera.zoom === VIEW_MAX_ZOOM);
+resetWellView();
+check('reset restores fitted zoom and world centre',
+      _camera.zoom===1 && _camera.cx===state.cfg.w/2 && _camera.cy===state.cfg.h/2);
+
 let threw=null;
 try{ for(let i=0;i<800;i++) step(); drawAll(); }catch(e){ threw=e; }
 check('drawAll does not throw', threw===null);
@@ -66,7 +88,8 @@ check('drawCreature does not throw at trait extremes', (() => {
   const c = wells.well.getContext('2d');
   try {
     for (const tr of [[0.2,0.35,4,0],[6,3.2,150,1],[1,1,30,0.5]]){
-      const o = makeOrganism(0,0,{speed:tr[0],size:tr[1],sense:tr[2],diet:tr[3]},1,{armor:true,venom:true,nocturnal:true});
+      const o = makeOrganism(0,0,{speed:tr[0],size:tr[1],sense:tr[2],diet:tr[3]},1,
+        {armor:true,venom:true,nocturnal:true,carnivore:true,claws:true,camouflage:true,pack:true});
       drawCreature(c, o, 8, {detail:true});
       drawCreature(c, o, 1, {detail:false});
     }

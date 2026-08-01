@@ -106,35 +106,62 @@ check('traitDistance is unaffected by cognitive-trait differences alone', (() =>
   return traitDistance(a,b) === 0;
 })());
 
-/* --- HONEST NEGATIVE RESULT: the Baldwin effect is not yet demonstrated ---
-   The headline this scenario was scoped for -- innate wariness rising while a
-   meaningful learned component first appears and then gets assimilated -- does not
-   occur. Measured cause: a typical organism experiences under 0.5 predation attempts
-   in its entire life (2.9-13.8 attempts/organism per 20,000 ticks against a median
-   lifespan of ~671; confirmed the bottleneck by pushing predator density to extremes
-   and it stayed near zero regardless). This check pins the CURRENT true state --
-   wariness rises under direct selection, learned stays negligible -- so a future
-   change that fixes this fails loudly here instead of the fix going unnoticed, and
-   so nobody mistakes silence for the effect having quietly started working. */
-function runBaldwin(seed, ticks){
+/* --- Ecological encounter-rate fix and PARTIAL genetic assimilation ---
+   M10 originally produced under 0.5 predation attempts per lifetime, so mean learned
+   skill stayed below 0.01. Baldwin now has scenario-local high-encounter/low-lethality
+   overrides: M5's shared predation constants remain untouched. The result across
+   three seeds is real but deliberately described narrowly: learning becomes useful,
+   then innate wariness overtakes the learned contribution. Plasticity itself remains
+   common, so this is partial assimilation, not complete genetic replacement. */
+check('Baldwin uses scenario-local frequent, low-lethality encounters', (() => {
+  initWorld({seed:'regime', scenario:'baldwin'});
+  return state.cfg.predationReachMul > PREDATION.reachMul &&
+    state.cfg.predationSizeRatio < PREDATION.sizeRatio &&
+    state.cfg.predationMinPreySize < PREDATION.minPreySize &&
+    state.cfg.predationLethality > 0 && state.cfg.predationLethality < 0.15;
+})());
+check('shared M5 Predation has no Baldwin-specific overrides', (() => {
+  initWorld({seed:'regime-control', scenario:'predation'});
+  return state.cfg.predationReachMul == null && state.cfg.predationLethality == null;
+})());
+
+function runBaldwinTrajectory(seed, earlyTick, lateTick){
   initWorld({seed, scenario:'baldwin'});
-  for(let i=0;i<ticks;i++) step();
+  for(let i=0;i<earlyTick;i++) step();
   if(!state.organisms.length) return null;
-  return {
+  const early = {
     wariness: traitStats('wariness').mean,
     plasticity: traitStats('plasticity').mean,
     learned: state.organisms.reduce((a,o)=>a+o.learned,0) / state.organisms.length,
   };
+  for(let i=earlyTick;i<lateTick;i++) step();
+  if(!state.organisms.length) return null;
+  const late = {
+    wariness: traitStats('wariness').mean,
+    plasticity: traitStats('plasticity').mean,
+    learned: state.organisms.reduce((a,o)=>a+o.learned,0) / state.organisms.length,
+  };
+  return { early, late, attemptsPerLife:state.stats.predationAttempts/(state.stats.born+LIFE.startPop) };
 }
-const b = runBaldwin('a', 30000);
-if(b){
-  console.log(`baldwin @30k: wariness ${b.wariness.toFixed(3)} plasticity ${b.plasticity.toFixed(3)} learned ${b.learned.toFixed(4)}`);
-  check('wariness rises under selection (this part works)', b.wariness > 0.10, `${b.wariness.toFixed(3)}`);
-  check('KNOWN GAP: mean learned skill stays negligible -- NOT the Baldwin signature',
-        b.learned < 0.05, `learned=${b.learned.toFixed(4)} -- if this ever exceeds 0.05, the encounter-rate fix landed; update this test and ROADMAP.md`);
-} else {
-  check('baldwin population survives to 30k ticks', false, 'EXTINCT -- unexpected, investigate before reusing this seed');
-}
+const trajectories = ['a','b','c'].map(s=>runBaldwinTrajectory(s,10000,75000)).filter(Boolean);
+const meanOf = (phase,key) => trajectories.reduce((sum,r)=>sum+r[phase][key],0)/trajectories.length;
+const earlyLearnedShare = meanOf('early','learned')/(meanOf('early','learned')+meanOf('early','wariness'));
+const lateLearnedShare = meanOf('late','learned')/(meanOf('late','learned')+meanOf('late','wariness'));
+console.log(`baldwin 3-seed mean — early w ${meanOf('early','wariness').toFixed(3)} learned ${meanOf('early','learned').toFixed(3)}; late w ${meanOf('late','wariness').toFixed(3)} learned ${meanOf('late','learned').toFixed(3)}`);
+check('all Baldwin populations survive the measured trajectory', trajectories.length===3);
+check('encounters rise by an order of magnitude without becoming near-continuous',
+      trajectories.every(r=>r.attemptsPerLife>5&&r.attemptsPerLife<25),
+      trajectories.map(r=>r.attemptsPerLife.toFixed(1)).join(','));
+check('learning becomes a meaningful phenotype instead of the old below-0.01 gap',
+      meanOf('early','learned')>0.07, meanOf('early','learned').toFixed(3));
+check('innate wariness eventually overtakes learned skill in every measured seed',
+      trajectories.every(r=>r.late.wariness>r.late.learned),
+      trajectories.map(r=>`${r.late.wariness.toFixed(2)}/${r.late.learned.toFixed(2)}`).join(','));
+check('the learned share of escape ability falls as innate wariness takes over',
+      lateLearnedShare<earlyLearnedShare-0.07,
+      `${earlyLearnedShare.toFixed(2)} -> ${lateLearnedShare.toFixed(2)}`);
+check('plasticity remains common: the result is partial, not complete assimilation',
+      meanOf('late','plasticity')>0.20, meanOf('late','plasticity').toFixed(3));
 
 /* --- determinism --- */
 function fp(){
