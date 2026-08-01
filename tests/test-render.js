@@ -5,6 +5,8 @@ const calls={};
 function mockCtx(){
   const rec=(k)=>(...a)=>{ calls[k]=(calls[k]||0)+1; };
   return { fillRect:rec('fillRect'), strokeRect:rec('strokeRect'), beginPath:rec('beginPath'),
+    ellipse:rec('ellipse'), moveTo:rec('moveTo'), lineTo:rec('lineTo'), closePath:rec('closePath'),
+    quadraticCurveTo:rec('quadraticCurveTo'), translate:rec('translate'), rotate:rec('rotate'),
     arc:rec('arc'), fill:rec('fill'), stroke:rec('stroke'), fillText:rec('fillText'),
     createRadialGradient:()=>({addColorStop(){}}), save(){}, restore(){},
     set fillStyle(v){}, get fillStyle(){return '';}, set strokeStyle(v){}, get strokeStyle(){return '';},
@@ -15,7 +17,7 @@ function mockCanvas(w,h){
   return { width:w, height:h, getContext:()=>mockCtx(),
            getBoundingClientRect:()=>({width:w,height:h}) };
 }
-const wells={ well:mockCanvas(900,620), ribbon:mockCanvas(900,170), census:mockCanvas(900,96) };
+const wells={ well:mockCanvas(900,620), ribbon:mockCanvas(900,170), census:mockCanvas(900,96), specimen:mockCanvas(300,150) };
 document.getElementById = (id)=> wells[id] || null;
 globalThis.devicePixelRatio = 2;
 
@@ -50,9 +52,27 @@ check('palette wraps rather than returning undefined',
       cladeColor(0) === cladeColor(CLADE_COLORS.length));
 check('distinct clades within the palette get distinct colours',
       new Set(CLADE_COLORS.map((_,k)=>cladeColor(k))).size === CLADE_COLORS.length);
+/* organismColor now blends DIET hue with clade colour, so it returns rgb(...) rather
+   than a hex literal — the check is that it produces a valid colour for an organism
+   that has not been assigned a clade yet, not that it matches any particular format
+   the old flat-colour version happened to use. */
 const o0 = makeOrganism(0,0,{speed:1,size:1,sense:30,diet:0.5},1);
 check('organismColor works on an organism with no clade assigned yet',
-      /^#[0-9A-Fa-f]{6}$/.test(organismColor(o0)));
+      /^rgb\(\d+,\d+,\d+\)$/.test(organismColor(o0)));
+check('organismColor varies with diet (specialists look different from each other)',
+      organismColor(makeOrganism(0,0,{speed:1,size:1,sense:30,diet:0},1))
+      !== organismColor(makeOrganism(0,0,{speed:1,size:1,sense:30,diet:1},1)));
+check('drawCreature does not throw at trait extremes', (() => {
+  const c = wells.well.getContext('2d');
+  try {
+    for (const tr of [[0.2,0.35,4,0],[6,3.2,150,1],[1,1,30,0.5]]){
+      const o = makeOrganism(0,0,{speed:tr[0],size:tr[1],sense:tr[2],diet:tr[3]},1,{armor:true,venom:true,nocturnal:true});
+      drawCreature(c, o, 8, {detail:true});
+      drawCreature(c, o, 1, {detail:false});
+    }
+    return true;
+  } catch(e){ return false; }
+})());
 
 /* extinction must not break the draw path */
 state.organisms=[];

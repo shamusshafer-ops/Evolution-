@@ -217,6 +217,58 @@ absorbed one explicitly recorded.
 Merges are announced too. A lineage rejoining another is as real an event as a split,
 and staying silent would leave a name vanishing from the species list unexplained.
 
+## Status
+
+**M9 shipped (2026-07-30).** Morphology. 240 tests.
+
+### Why this was the right first swing at "fun"
+
+Measured before starting: at 1x speed the first notable event fires at ~216s in
+Temperate and ~232s in Oasis, and two scenarios produce NO event in 30,000 ticks.
+A player's first ninety seconds contained nothing but a population counter moving.
+The sim was an excellent instrument and a mediocre game.
+
+Morphology is the highest fun-per-risk item available because it is PURE RENDERING —
+every visual property is read from a trait that already drives the simulation, so it
+cannot invalidate a single science result. Confirmed: all 10 suites unchanged, 240
+checks passing, including every measured finding from M1-M8.
+
+### The mapping — nothing invented
+
+| visual | trait | why |
+|---|---|---|
+| body radius | size | it already is one |
+| elongation + tail | speed | drag: fast bodies are streamlined for the same reason here as in reality |
+| eye radius | sense | vision is expensive tissue, and METAB charges sense^2, so big eyes should LOOK costly |
+| hue | diet | a specialist visibly belongs to the resource it eats |
+| dorsal plating | armour | — |
+| tail barb | venom | — |
+| eyeshine ring | nocturnal | tapetum lucidum |
+
+### The Specimens panel
+
+At well scale a creature is a few pixels; the morphology is barely legible. The panel
+draws each lineage's mean form side by side at full size, which is where 20,000 ticks
+of accumulated drift becomes something you can actually look at and compare.
+
+Draws the clade MEAN rather than a sampled individual deliberately: an individual
+would jitter frame to frame with whoever happened to be picked, reading as noise
+rather than as the lineage changing.
+
+### Remaining from the SPORE evaluation, in owner's ranked order
+
+1. ~~Morphology~~ — shipped here
+2. **Eras / unlock thresholds** — the SPORE spine. Genuine thresholds that unlock new
+   trait axes rather than fake stage transitions. The most dangerous item on the list:
+   done badly it turns a real simulation into a skill tree with evolution flavouring.
+3. **Follow a lineage** — camera follows a clade, UI filters to it, notifications
+   become about YOUR species. Cheap now that lineage ids persist (M8).
+4. **Compress the timeline** — the 3-minute dead zone measured above.
+
+Owner's direction on scope: BOTH science mode and game mode, sharing one engine. The
+scenario-flag pattern (predation, adaptations, dayNight) is the mechanism — game-mode
+features gate behind flags so science-mode results stay reproducible.
+
 ## Standing practice — in-app changelog
 
 Every future change that alters what the sim DOES gets a `CHANGELOG` entry in

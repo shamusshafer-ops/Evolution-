@@ -31,3 +31,7 @@
 |28| Social/flocking adaptation | The fourth adaptation, deferred from M6 — needs neighbour queries, more expensive than the other three | M | Backlog |
 |29| Name the ACTUAL new clade, not the smallest one | Fixed by #2 — the matcher records which group is genuinely new, so the toast names exact parentage | S | **Shipped 2026-07-30** |
 |30| Phylogeny view | The DATA now exists (#2 shipped: persistent ids, split/merge events with parents). This is the visualisation on top of it — a tree of who descended from whom | M | Backlog |
+|31| Morphology — draw creatures as their traits describe | Owner-ranked #1 of the SPORE evaluation. Pure rendering, no sim change | M | **Shipped 2026-07-30** |
+|32| Eras / unlock thresholds | Owner-ranked #2. Thresholds unlocking new trait axes. Riskiest item: badly done it becomes a skill tree with evolution flavouring | L | Next up |
+|33| Follow a lineage (camera + filtered UI) | Owner-ranked #3. Cheap now that lineage ids persist (M8) | M | Backlog |
+|34| Compress the timeline | Owner-ranked #4. Measured: first event at ~216s at 1x; two scenarios produce none in 30k ticks | S | Backlog |
