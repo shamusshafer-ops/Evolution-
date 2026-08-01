@@ -139,7 +139,17 @@ function drainEvents(){
     if (ev.type === 'speciation') showSpeciationToast(ev);
     else if (ev.type === 'merge') showMergeToast(ev);
     else if (ev.type === 'adaptation') showAdaptationToast(ev);
+    else if (ev.type === 'environment') showEnvironmentToast(ev);
   }
+}
+
+function showEnvironmentToast(ev){
+  const host=$('toasts'); if(!host)return;
+  const el=document.createElement('div');
+  el.className='toast environment'; el.style.borderColor=ev.color||PAL.sense;
+  el.innerHTML=`<b style="color:${ev.color||PAL.sense}">${ev.name}</b> — ${ev.message||'the environment changed.'}${ev.detail?` <span class="spsub">${ev.detail}</span>`:''}`;
+  host.appendChild(el);
+  setTimeout(()=>{if(el.parentNode)el.parentNode.removeChild(el);},5100);
 }
 
 function showAdaptationToast(ev){

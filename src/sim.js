@@ -68,10 +68,13 @@ function makeState(opts){
     lineageOf: new Map(),  // organism id -> lineage id, as of the last computeSpecies() call
     events: [],            // queued notifications for the UI to drain (speciation, etc.)
     adaptationsSeen: {},   // one-time emergence notifications, reset with each run
+    environmentHistory: [],// automatic Living World events, retained for replay/testing
+    nextEnvironmentEvent: null,
     foodCarry: 0,
     running: false,
     speedMult: 1,
-    stats: { born:0, starved:0, aged:0, eaten:0, peakPop:0, unmated:0, culled:0, predated:0, escapes:0, predationAttempts:0, nearMisses:0 },
+    stats: { born:0, starved:0, aged:0, eaten:0, peakPop:0, unmated:0, culled:0, predated:0, escapes:0, predationAttempts:0, nearMisses:0,
+             flockTicks:0, kinTransfers:0, sharedEnergy:0, careEnergy:0 },
     history: [],          // per-sample trait means
     ribbon: [],           // per-sample trait HISTOGRAMS, for the drift ribbon
     sampleEvery: 30,
@@ -180,6 +183,10 @@ function makeOrganism(x, y, traits, gen, adapt){
     learned: 0,          // within-lifetime escape skill; NOT inherited (that is the point)
     escapes: 0,          // near-misses survived, for inspection
     ad: {},              // discrete adaptation genes; see ADAPTATIONS in data.js
+    parents: [],         // recent pedigree, used for actual kin recognition
+    grandparents: [],
+    shareCooldown: 0,
+    flockN: 0,
     homePatch: x < state.cfg.w/2 ? 0 : 1, // birthplace side; used only by site fidelity
     x, y,
     dir: rnd() * Math.PI * 2,
@@ -291,6 +298,7 @@ function initWorld(opts){
   computeSpecies();
 
   sampleHistory();
+  if(state.cfg.stochasticEnvironment) scheduleEnvironmentEvent();
   return state;
 }
 
@@ -459,8 +467,21 @@ function reproduceSexual(a, b){
   const giveB = b.energy * LIFE.reproduceCost;
   a.energy -= giveA;
   b.energy -= giveB;
+  // Parental care conserves energy exactly: extra reserves in the newborn are taken
+  // from the caring adults after their ordinary reproductive contribution.
+  let careEnergy=0;
+  if (state.cfg.socialEvolution){
+    for(const p of [a,b]){
+      if (!p.ad || !p.ad.parentalcare) continue;
+      const extra=p.energy*SOCIAL.careExtraFrac;
+      p.energy-=extra; careEnergy+=extra;
+    }
+    state.stats.careEnergy=(state.stats.careEnergy||0)+careEnergy;
+  }
   const child = makeOrganism(a.x, a.y, childTraits, Math.max(a.gen, b.gen) + 1, childAdapt);
-  child.energy = giveA + giveB;
+  child.parents=[a.id,b.id];
+  child.grandparents=[...(new Set([...(a.parents||[]),...(b.parents||[])]))].slice(0,4);
+  child.energy = giveA + giveB + careEnergy;
   child.dir = rnd() * Math.PI * 2;
   state.organisms.push(child);
   detectAdaptationEmergence(child, a);
@@ -526,16 +547,172 @@ function updateShocks(){
   state.activeShocks = still;
 }
 
+/* ---------- Seeded stochastic environment ---------- */
+function scheduleEnvironmentEvent(){
+  const span=LIVING_WORLD.maxInterval-LIVING_WORLD.minInterval;
+  state.nextEnvironmentEvent=state.tick+LIVING_WORLD.minInterval+Math.floor(rnd()*(span+1));
+}
+
+function applyLivingWorldEvent(key){
+  if(!state.cfg.stochasticEnvironment) return false;
+  const def=LIVING_EVENT_BY_KEY[key]; if(!def) return false;
+  let detail='';
+  if(key==='drought'||key==='bloom'){
+    if(!triggerShock(key)) return false;
+    detail=`${SHOCKS_BY_ID[key].duration} ticks`;
+  }else if(key==='dieoff'){
+    const n=Math.floor(state.organisms.length*LIVING_WORLD.dieoffFraction);
+    for(let i=0;i<n&&state.organisms.length;i++){
+      state.organisms.splice((rnd()*state.organisms.length)|0,1);
+    }
+    state.stats.culled=(state.stats.culled||0)+n;
+    detail=`${n} organisms lost`;
+  }else if(key==='turnover'){
+    const n=Math.min(state.sites.length,Math.max(1,Math.floor(state.sites.length*LIVING_WORLD.turnoverFraction)));
+    const available=state.sites.map((_,i)=>i);
+    for(let k=0;k<n;k++){
+      const pick=(rnd()*available.length)|0,idx=available.splice(pick,1)[0];
+      const site=state.sites[idx];
+      site.t=FOOD_TYPES.length>1?(site.t+1)%FOOD_TYPES.length:0;
+    }
+    detail=`${n} sites changed`;
+  }else if(key==='dispersal'){
+    const n=Math.min(state.organisms.length,Math.max(1,Math.floor(state.organisms.length*LIVING_WORLD.dispersalFraction)));
+    const available=state.organisms.map((_,i)=>i);
+    for(let k=0;k<n;k++){
+      const pick=(rnd()*available.length)|0,idx=available.splice(pick,1)[0];
+      const o=state.organisms[idx]; o.x=state.cfg.w-o.x; o.dir=Math.PI-o.dir;
+    }
+    detail=`${n} organisms displaced`;
+  }
+  const record={tick:state.tick,key,name:def.name,detail};
+  state.environmentHistory.push(record);
+  state.events.push({type:'environment',tick:state.tick,key,name:def.name,
+                     color:def.color,message:def.message,detail});
+  return true;
+}
+
+function stochasticEnvironmentPass(){
+  if(!state.cfg.stochasticEnvironment||state.nextEnvironmentEvent==null||state.tick<state.nextEnvironmentEvent)return;
+  let choices=LIVING_WORLD.events;
+  // Patch shocks cannot safely overlap; while one is active, choose among the three
+  // instantaneous events rather than silently clobbering restoration state.
+  if(state.activeShocks&&state.activeShocks.length){
+    choices=choices.filter(e=>e.key!=='drought'&&e.key!=='bloom');
+  }
+  const chosen=choices[(rnd()*choices.length)|0];
+  applyLivingWorldEvent(chosen.key);
+  scheduleEnvironmentEvent();
+}
+
+/* ---------- Social interactions ---------- */
+function buildSocialGrid(pop,cell){
+  const cfg=state.cfg;
+  const cols=Math.max(1,Math.ceil(cfg.w/cell)), rows=Math.max(1,Math.ceil(cfg.h/cell));
+  const grid=new Map();
+  for(let i=0;i<pop.length;i++){
+    const o=pop[i], cx=clamp(Math.floor(o.x/cell),0,cols-1), cy=clamp(Math.floor(o.y/cell),0,rows-1);
+    const k=cy*cols+cx; let b=grid.get(k); if(!b){b=[];grid.set(k,b);} b.push(i);
+  }
+  return {grid,cell,cols,rows};
+}
+
+function nearbySocialIndices(o,spatial,radius){
+  const cfg=state.cfg, out=[];
+  const reach=Math.ceil(radius/spatial.cell);
+  const cx=clamp(Math.floor(o.x/spatial.cell),0,spatial.cols-1);
+  const cy=clamp(Math.floor(o.y/spatial.cell),0,spatial.rows-1);
+  const seen=new Set(), r2=radius*radius;
+  for(let gy=cy-reach;gy<=cy+reach;gy++){
+    for(let gx=cx-reach;gx<=cx+reach;gx++){
+      let ax=gx,ay=gy;
+      if(cfg.wrap){ax=((gx%spatial.cols)+spatial.cols)%spatial.cols;ay=((gy%spatial.rows)+spatial.rows)%spatial.rows;}
+      else if(gx<0||gy<0||gx>=spatial.cols||gy>=spatial.rows) continue;
+      const bucket=spatial.grid.get(ay*spatial.cols+ax); if(!bucket) continue;
+      for(const j of bucket){
+        if(seen.has(j)) continue; seen.add(j);
+        const q=state.organisms[j];
+        const dx=wrapDelta(q.x-o.x,cfg.w),dy=wrapDelta(q.y-o.y,cfg.h);
+        if(dx*dx+dy*dy<=r2) out.push(j);
+      }
+    }
+  }
+  return out;
+}
+
+function socialMovementPass(){
+  if(!state.cfg.socialEvolution) return;
+  const pop=state.organisms, spatial=buildSocialGrid(pop,SOCIAL.flockRadius);
+  const headings=new Array(pop.length);
+  for(let i=0;i<pop.length;i++){
+    const o=pop[i]; o.flockN=0;
+    if(!o.ad||!o.ad.flocking) continue;
+    let sx=0,sy=0,cx=0,cy=0,n=0;
+    for(const j of nearbySocialIndices(o,spatial,SOCIAL.flockRadius)){
+      if(j===i) continue;
+      const q=pop[j]; if(!q.ad||!q.ad.flocking) continue;
+      sx+=Math.cos(q.dir); sy+=Math.sin(q.dir);
+      cx+=wrapDelta(q.x-o.x,state.cfg.w); cy+=wrapDelta(q.y-o.y,state.cfg.h); n++;
+    }
+    o.flockN=n;
+    if(!n) continue;
+    const keep=1-SOCIAL.flockAlignment;
+    const vx=Math.cos(o.dir)*keep+(sx/n)*SOCIAL.flockAlignment+(cx/n)*SOCIAL.flockCohesion;
+    const vy=Math.sin(o.dir)*keep+(sy/n)*SOCIAL.flockAlignment+(cy/n)*SOCIAL.flockCohesion;
+    headings[i]=Math.atan2(vy,vx);
+    state.stats.flockTicks=(state.stats.flockTicks||0)+1;
+  }
+  for(let i=0;i<pop.length;i++) if(headings[i]!=null) pop[i].dir=headings[i];
+}
+
+/* Recent pedigree relatedness: parent/offspring and full siblings are 0.5, half
+   siblings 0.25, and shared grandparents contribute 0.0625 each. This is deliberately
+   local genealogy rather than clade membership — an entire species is not “close kin”. */
+function recentRelatedness(a,b){
+  const ap=a.parents||[],bp=b.parents||[];
+  if(ap.includes(b.id)||bp.includes(a.id)) return 0.5;
+  let sharedParents=0; for(const id of ap) if(bp.includes(id)) sharedParents++;
+  if(sharedParents) return Math.min(0.5,sharedParents*0.25);
+  const ag=a.grandparents||[],bg=b.grandparents||[];
+  let sharedGrand=0; for(const id of ag) if(bg.includes(id)) sharedGrand++;
+  return Math.min(0.25,sharedGrand*0.0625);
+}
+
+function kinProvisionPass(){
+  if(!state.cfg.socialEvolution) return;
+  const pop=state.organisms,spatial=buildSocialGrid(pop,SOCIAL.kinRadius);
+  const reserve=LIFE.reproduceAt*SOCIAL.kinReserveFrac;
+  for(let i=0;i<pop.length;i++){
+    const donor=pop[i];
+    if(!donor.ad||!donor.ad.kinshare||donor.shareCooldown>0||donor.energy<=reserve) continue;
+    let target=-1,lowest=Infinity;
+    for(const j of nearbySocialIndices(donor,spatial,SOCIAL.kinRadius)){
+      if(j===i) continue; const q=pop[j];
+      if(recentRelatedness(donor,q)<SOCIAL.kinMinRelatedness) continue;
+      if(q.energy<lowest&&q.energy<LIFE.startEnergy){lowest=q.energy;target=j;}
+    }
+    if(target<0) continue;
+    const amount=Math.min(SOCIAL.kinTransfer,donor.energy-reserve);
+    if(amount<=0) continue;
+    donor.energy-=amount; pop[target].energy+=amount; donor.shareCooldown=SOCIAL.kinCooldown;
+    state.stats.kinTransfers=(state.stats.kinTransfers||0)+1;
+    state.stats.sharedEnergy=(state.stats.sharedEnergy||0)+amount;
+  }
+}
+
 function step(){
   const cfg = state.cfg;
   const fg = buildFoodGrid();
   const eatenFood = new Set();
   const survivors = [];
 
+  socialMovementPass();
+
   for (let i = 0; i < state.organisms.length; i++){
     const o = state.organisms[i];
     o.age++;
     if (o.predCooldown > 0) o.predCooldown--;
+    if (o.shareCooldown > 0) o.shareCooldown--;
 
     /* --- seek ---
        Off-phase organisms do not forage: a nocturnal one rests through the day and a
@@ -594,6 +771,8 @@ function step(){
 
   state.organisms = survivors;
 
+  kinProvisionPass();
+
   // Predation resolves before reproduction: an organism eaten this tick must not
   // also breed this tick.
   predationPass();
@@ -619,6 +798,7 @@ function step(){
   // compared the OLD tick value against `until`, so restoration landed one full tick
   // late every time — caught by test-environment.js asserting an exact boundary.
   updateShocks();
+  stochasticEnvironmentPass();
   if (state.organisms.length > state.stats.peakPop) state.stats.peakPop = state.organisms.length;
   if (state.tick % state.sampleEvery === 0) sampleHistory();
 }
@@ -673,6 +853,11 @@ function predationEscapeChance(pred, prey){
   const speedAdv=(preySpeed-predSpeed)/Math.max(0.001,predSpeed);
   let chance=clamp(speedAdv*PREDATION.escapeMul,0,0.95);
   chance=clamp(chance+escapeAbility(prey)*LEARNING.escapeWeight,0,0.95);
+  if(state.cfg.socialEvolution&&prey.ad&&prey.ad.flocking&&prey.flockN>0){
+    // Many-eyes/confusion benefit requires actual flockmates this tick. A carrier
+    // alone gets zero, which prevents the gene from becoming a free defence flag.
+    chance=clamp(chance+Math.min(SOCIAL.flockEscapeMax,prey.flockN*SOCIAL.flockEscapePerMate),0,0.95);
+  }
   if (state.cfg.advancedAdaptations && pred.ad && pred.ad.claws){
     chance *= ADAPT_BY_KEY.claws.captureMul;
   }

@@ -25,13 +25,15 @@ node --check build/evo.js  # syntax check on the bundle
 cat tests/harness.js build/evo.js tests/test-NAME.js | node
 ```
 
-There is no `npm test` — the suite is 14 files, run one at a time. `tests/harness.js`
+There is no `npm test` — the suite is 16 files, run one at a time. `tests/harness.js`
 provides the browser-free globals (`document`, `window`, etc.) that let `sim.js` run
-headless. Current files (372 checks total as of this handoff): `test-core.js`,
+headless. Current files (441 checks total as of this handoff): `test-core.js`,
 `test-niche.js`, `test-render.js`, `test-selection.js`, `test-speciation.js`,
 `test-ui.js`, `test-environment.js`, `test-predation.js`, `test-adaptations.js`,
-`test-lineage.js`, `test-learning.js`, `test-carnivory.js`, and
-`test-advanced-adaptations.js`, and `test-radiation.js`. (`test-species.js` existed briefly in M2/M3
+`test-lineage.js`, `test-learning.js`, `test-carnivory.js`,
+`test-advanced-adaptations.js`, `test-radiation.js`, `test-social.js`, and
+`test-living-world.js`.
+(`test-species.js` existed briefly in M2/M3
 and was deleted when hardcoded species were replaced by emergent ones — if you see
 it referenced in old commit messages, that's why it's gone.)
 
@@ -45,8 +47,9 @@ loop with a short one.
 ## The rule that matters most: scenario-flag gating
 
 `cfg.predation`, `cfg.adaptations`, `cfg.dayNight`, `cfg.learning`, `cfg.carnivory`,
-`cfg.advancedAdaptations`, `cfg.radiationAdaptations`. Every mechanic
-built after M4 lives behind one of these. **Never make a new mechanic apply
+`cfg.advancedAdaptations`, `cfg.radiationAdaptations`, `cfg.socialEvolution`,
+`cfg.stochasticEnvironment`. Every mechanic built after M4 lives behind one of these.
+**Never make a new mechanic apply
 unconditionally.** The reason: this repo's credibility rests on measured, reproduced
 findings (Gause's exclusion, Kleiber scaling, the M5 bistability, negative
 frequency-dependence in M6, allopatric vs sympatric speciation in M4/M8). If a new
@@ -132,6 +135,21 @@ touching a threshold, and say so in the commit message the way past commits have
   one path. A paired five-seed/20k comparison measured 3/5 control speciation versus
   5/5 with developments, and mean first split fell from 16.3k to 2.7k. This supports
   faster radiation, not equal causal credit for all three genes.
+- **Social Evolution is shipped.** Flocking uses local alignment/cohesion and a
+  neighbour-dependent escape bonus; kin provisioning uses recorded two-generation
+  pedigree and conserved energy; parental care transfers parental reserves to the
+  newborn. Three 30k seeds stayed viable and exercised all behaviours, with final
+  social-gene frequencies 0.006–0.114. Report persistence/activity, not a universal
+  fitness advantage—the latter has not been isolated factorially.
+- **Living World is shipped.** It enables every flag and schedules five seeded event
+  types at 800–1,600-tick intervals. Three 30k runs survived, experienced every event
+  type, retained all 13 adaptations, and reached peak species counts 2/2/3. Treat
+  those as sandbox viability/variety results, never causal attribution.
+- **Detailed anatomy replaced the M9 mouse-like silhouette.** One homologous
+  terrestrial skeleton now maps speed to limbs/stance, sense to restrained eye
+  anatomy, and diet to jaws. Physical adaptations alter anatomy; behavioural genes
+  use external badges/cues. Species portraits select real medoids plus real variants,
+  and well zoom reaches 24×. This is rendering only and consumes no simulation RNG.
 
 **Next product decision:** owner-ranked #32 (eras / genuine unlock thresholds) is the
 next large game-mode slice. Follow-a-lineage (#33) and timeline compression (#34) are
@@ -147,6 +165,6 @@ sufficient) rather than assuming `git` is configured. Do not commit a token to a
 file in this repo, ever, including this one.
 
 Before pushing: `node build.js && node build.js --check`, run the full test suite
-(budget ~15-20 minutes for all 14 files individually), then push `src/`, `build/`,
+(budget ~15-20 minutes for all 16 files individually), then push `src/`, `build/`,
 `index.html`, `tests/`, and the three doc files together in one commit so the
 generated artifacts never drift from `src/` in the remote history.

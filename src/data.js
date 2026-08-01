@@ -14,12 +14,18 @@ const VERSION = '0.1.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-08-01', tag:'morphology', title:'Species have a shared, detailed evolving anatomy',
+    text:'The oval mouse-like marker has been replaced by one invented terrestrial ancestral body plan with a distinct skull, neck, muscular tail, articulated four-limb skeleton, joints, feet, surface shading, and layered detail visible through 24× zoom. Speed now changes limb proportions and stance, sense changes restrained eye anatomy, and diet changes the feeding apparatus from a gracile soft-food cropper to a deep woody-food crusher. Armour, venom, carnivory, claws, camouflage, nocturnality, and courtship alter real anatomy; social and life-history genes remain clearly external badges or live interaction cues. Species portraits now show an actual living representative plus two real morphological variants instead of a synthetic average that may never have existed.' },
+  { date:'2026-08-01', tag:'sandbox', title:'Living World turns every system loose',
+    text:'A seeded free-for-all scenario enables every ecological, genetic, learning, social, predation, and speciation system together. Automatic droughts, blooms, moderate die-offs, resource turnover, and storm dispersal arrive at irregular deterministic intervals and announce themselves. The same seed recreates the same sequence. Across three 30,000-tick runs every population survived, experienced all five event types, retained all 13 binary adaptations, evolved multiple species, and exercised predation, learning, and all social systems.' },
+  { date:'2026-08-01', tag:'social evolution', title:'Social behaviour can evolve locally',
+    text:'The Social Evolution scenario adds three heritable strategies grounded in individual tradeoffs. Flocking emerges from local alignment and cohesion, improving predator confusion only when neighbours are physically present while increasing local food competition. Kin provisioning transfers real energy only to recent relatives, using parent and grandparent records rather than species labels. Parental care moves additional energy from parents into offspring, improving juvenile reserves at the cost of future reproduction. Across three 30,000-tick runs all populations remained viable, every behaviour executed repeatedly, and all three genes persisted at low-to-moderate frequency rather than becoming universal upgrades.' },
   { date:'2026-08-01', tag:'speciation', title:'Adaptive Radiation combines the pressures',
     text:'A new scenario composes patch geography, two resources, seasons, day/night, predation, carnivory, and the full adaptation set while leaving every controlled scenario intact. Three additional heritable developments can reduce gene flow: site fidelity keeps carriers near their birth habitat, courtship crests enforce tighter diet-based mate recognition, and a breeding-time shift creates temporal isolation. Species detection now uses the same compatibility rule as actual mating. With the exact combined ecology as control, speciation occurred in 3/5 runs by 20,000 ticks; enabling the developments produced it in 5/5 and cut mean first-split time by more than half.' },
   { date:'2026-08-01', tag:'ecology', title:'A richer evolutionary arms race',
     text:'The new Arms Race scenario adds three visible, binary, heritable adaptations without changing the measured Food Chain run. Claws reduce a prey’s chance to escape but cost upkeep. Camouflage shrinks predator detection range but slows movement. Pack hunters can combine the effective size of nearby cooperating predators, but the gene costs upkeep and gives a lone carrier nothing. Each first appearance is announced.' },
   { date:'2026-08-01', tag:'ui', title:'The specimen well is navigable',
-    text:'Drag to pan and use the wheel, pinch gesture, +/− buttons, or keyboard to zoom up to 8×. The camera stays on the same location when fullscreen opens or closes. Pause/Run is now available directly over the well in both views; double-click, 1:1, or the 0 key resets the camera.' },
+    text:'Drag to pan and use the wheel, pinch gesture, +/− buttons, or keyboard to zoom up to 24×. The camera stays on the same location when fullscreen opens or closes. Pause/Run is now available directly over the well in both views; double-click, 1:1, or the 0 key resets the camera.' },
   { date:'2026-08-01', tag:'ecology', title:'Carnivory can evolve',
     text:'The Food Chain scenario starts with prey only. A binary carnivore gene can arise by mutation and is inherited by descendants: carriers grow visible forward teeth, can hunt non-carnivores, and cannot digest environmental food. That strict tradeoff keeps predators self-limiting instead of turning carnivory into a free upgrade. A one-time toast announces the first predator birth. Across three 30,000-tick runs, predators and prey coexist while carnivores remain a small minority and produce hundreds of kills.' },
   { date:'2026-08-01', tag:'M10', title:'Learning gets an ecology — partial genetic assimilation measured',
@@ -213,6 +219,25 @@ const SHOCKS = [
 ];
 const SHOCKS_BY_ID = {};
 for (const s of SHOCKS) SHOCKS_BY_ID[s.id] = s;
+
+/* Automatic events for Living World. Intervals are irregular but use the seeded sim
+   RNG, so “random” means unpredictable while watching, not irreproducible afterward. */
+const LIVING_WORLD = {
+  minInterval:800,
+  maxInterval:1600,
+  dieoffFraction:0.20,
+  turnoverFraction:0.34,
+  dispersalFraction:0.10,
+  events:[
+    {key:'drought',name:'Drought',color:'#E8B04B',message:'food production has collapsed temporarily.'},
+    {key:'bloom',name:'Resource bloom',color:'#6FD3A2',message:'food production has surged temporarily.'},
+    {key:'dieoff',name:'Random die-off',color:'#E8734B',message:'an indiscriminate mortality event has reduced the population.'},
+    {key:'turnover',name:'Resource turnover',color:'#5FC7C9',message:'resource sites have changed type, reshaping the niche map.'},
+    {key:'dispersal',name:'Dispersal storm',color:'#4EA8DE',message:'part of the population has been carried across the habitat.'},
+  ],
+};
+const LIVING_EVENT_BY_KEY={};
+for(const e of LIVING_WORLD.events)LIVING_EVENT_BY_KEY[e.key]=e;
 
 /* ---------- Migration / patches ----------
    No second world. Two resource clusters at opposite ends of the SAME well, joined by
@@ -431,6 +456,34 @@ const ADAPTATIONS = [
     emergence:'now breeds in the later seasonal window.',
     blurb:'Moves reproduction into the later half of the seasonal cycle. Early and late breeders no longer exchange genes; each loses half the breeding year.'
   },
+  {
+    key:'flocking', name:'Flocking', short:'FLK', color:'#58B7D9', glyph:'≈',
+    enabledBy:'socialEvolution', notify:true, mutateChance:0.012,
+    /* No metabolic surcharge: the cost emerges because flockmates converge on the
+       same ground and compete for the same food. The benefit likewise requires real
+       neighbours — no nearby carriers means no confusion/many-eyes bonus. */
+    costCoef:0, costExp:0,
+    emergence:'now aligns and groups with nearby carriers.',
+    blurb:'Aligns and coheres with nearby carriers. Groups improve predator confusion, but crowd their members onto the same food; a lone carrier gains nothing.'
+  },
+  {
+    key:'kinshare', name:'Kin provisioning', short:'KIN', color:'#E9868F', glyph:'♥',
+    enabledBy:'socialEvolution', notify:true, mutateChance:0.012,
+    /* Hamiltonian inclusive fitness: help is restricted to recent relatives. Energy
+       is conserved exactly, so every unit received is a unit the donor cannot use. */
+    costCoef:0, costExp:0,
+    emergence:'can now provision nearby close relatives.',
+    blurb:'Transfers real energy from a well-fed carrier to a hungry parent, child, or sibling nearby. Helping kin can preserve shared genes; helping still directly costs the donor.'
+  },
+  {
+    key:'parentalcare', name:'Parental care', short:'CARE', color:'#E7B85C', glyph:'●',
+    enabledBy:'socialEvolution', notify:true, mutateChance:0.012,
+    /* Parents add a fraction of their remaining reserve to the newborn after the
+       normal reproductive contribution. No energy appears from nowhere. */
+    costCoef:0, costExp:0,
+    emergence:'now invests additional reserves in newborn offspring.',
+    blurb:'Parents transfer extra energy into each newborn. Young begin safer from starvation, while caring adults retain less energy for their next reproduction.'
+  },
 ];
 const ADAPT_KEYS = ADAPTATIONS.map(a => a.key);
 const ADAPT_BY_KEY = {};
@@ -446,6 +499,23 @@ for (const a of ADAPTATIONS) ADAPT_BY_KEY[a.key] = a;
    mutation pressure was drowning selection and destroying the conditional-benefit
    contrast the whole system exists to show. */
 const ADAPT_MUTATE = 0.006;
+
+/* ---------- Social evolution ----------
+   Local mechanics only. These constants never affect a scenario unless
+   cfg.socialEvolution is enabled. */
+const SOCIAL = {
+  flockRadius:46,
+  flockAlignment:0.34,
+  flockCohesion:0.018,
+  flockEscapePerMate:0.045,
+  flockEscapeMax:0.24,
+  kinRadius:38,
+  kinMinRelatedness:0.25,
+  kinTransfer:12,
+  kinReserveFrac:0.72,
+  kinCooldown:28,
+  careExtraFrac:0.12,
+};
 
 /* ---------- Learning ----------
    Learned predator avoidance, plus the conditions for the BALDWIN EFFECT.
@@ -636,6 +706,21 @@ const SCENARIOS = [
       wrap:false, twoPatches:true, seasonal:true, predation:true, adaptations:true,
       dayNight:true, carnivory:true, advancedAdaptations:true, radiationAdaptations:true,
       predationReachMul:5.0, predationSizeRatio:1.10, predationMinPreySize:0.35 } },
+
+  /* Controlled social ecology: predation makes grouping useful, while clumped food
+     makes crowding costly. The older Wild trajectory remains untouched. */
+  { id:'social', name:'Social Evolution', blurb:'Flocks form from local movement, relatives can share scarce energy, and parents can invest more in young. Every benefit is paid by crowding or conserved energy.',
+    patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34,
+      predation:true, adaptations:true, socialEvolution:true } },
+
+  /* The sandbox: intentionally confounded, explicitly not a causal experiment. */
+  { id:'livingworld', name:'Living World', blurb:'Everything is enabled. Seeded droughts, blooms, die-offs, resource turnover, and dispersal reshape a world containing every adaptation, social strategy, learning path, and route to speciation.',
+    patch:{ foodPerTick:5.0, foodEnergy:60, foodMax:1000, clumped:true, siteCount:44, clumpRadius:32,
+      wrap:false, twoPatches:true, seasonal:true, stochasticEnvironment:true,
+      predation:true, adaptations:true, dayNight:true, learning:true, carnivory:true,
+      advancedAdaptations:true, radiationAdaptations:true, socialEvolution:true,
+      predationReachMul:7.0, predationSizeRatio:1.05, predationMinPreySize:0.30,
+      predationCooldown:36, predationAttemptCooldown:36, predationLethality:0.18 } },
 
   /* The Baldwin experiment needs frequent, survivable experience rather than M5's
      rare lethal kills. These overrides belong to this scenario only: the shared

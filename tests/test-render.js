@@ -40,7 +40,7 @@ const cxBeforePan=_camera.cx;
 panWellBy(45,0);
 check('dragging pans the camera in world space', _camera.cx < cxBeforePan);
 zoomWellAt(100);
-check('zoom is capped at 8x', _camera.zoom === VIEW_MAX_ZOOM);
+check('zoom is capped at 24x for anatomical inspection', _camera.zoom === VIEW_MAX_ZOOM);
 resetWellView();
 check('reset restores fitted zoom and world centre',
       _camera.zoom===1 && _camera.cx===state.cfg.w/2 && _camera.cy===state.cfg.h/2);
@@ -74,16 +74,31 @@ check('palette wraps rather than returning undefined',
       cladeColor(0) === cladeColor(CLADE_COLORS.length));
 check('distinct clades within the palette get distinct colours',
       new Set(CLADE_COLORS.map((_,k)=>cladeColor(k))).size === CLADE_COLORS.length);
-/* organismColor now blends DIET hue with clade colour, so it returns rgb(...) rather
-   than a hex literal — the check is that it produces a valid colour for an organism
-   that has not been assigned a clade yet, not that it matches any particular format
-   the old flat-colour version happened to use. */
+/* Skin colour is deliberately lineage-accented but diet-neutral. Diet now changes the
+   jaw, avoiding a false biological claim that food preference dictates skin hue. */
 const o0 = makeOrganism(0,0,{speed:1,size:1,sense:30,diet:0.5},1);
 check('organismColor works on an organism with no clade assigned yet',
       /^rgb\(\d+,\d+,\d+\)$/.test(organismColor(o0)));
-check('organismColor varies with diet (specialists look different from each other)',
+check('organismColor does not invent a diet-to-skin-colour relationship',
       organismColor(makeOrganism(0,0,{speed:1,size:1,sense:30,diet:0},1))
-      !== organismColor(makeOrganism(0,0,{speed:1,size:1,sense:30,diet:1},1)));
+      === organismColor(makeOrganism(0,0,{speed:1,size:1,sense:30,diet:1},1)));
+const otherClade=makeOrganism(0,0,{speed:1,size:1,sense:30,diet:0.5},1);otherClade.clade=1;
+check('organismColor preserves lineage identity as an analytical accent',organismColor(o0)!==organismColor(otherClade));
+
+const slow=derivePhenotype(makeOrganism(0,0,{speed:0.2,size:1,sense:4,diet:0},1),10);
+const fast=derivePhenotype(makeOrganism(0,0,{speed:6,size:1,sense:4,diet:0},1),10);
+check('speed lengthens homologous limbs',fast.upperLeg>slow.upperLeg&&fast.lowerLeg>slow.lowerLeg);
+check('speed streamlines the torso instead of lengthening the tail',fast.torsoW<slow.torsoW&&fast.tailL===slow.tailL);
+const keen=derivePhenotype(makeOrganism(0,0,{speed:1,size:1,sense:150,diet:0.5},1),10);
+check('sense enlarges the restrained eye anatomy',keen.eyeR>slow.eyeR);
+const soft=derivePhenotype(makeOrganism(0,0,{speed:1,size:1,sense:30,diet:0},1),10);
+const woody=derivePhenotype(makeOrganism(0,0,{speed:1,size:1,sense:30,diet:1},1),10);
+check('diet changes feeding anatomy',soft.snoutL>woody.snoutL&&soft.headW<woody.headW);
+
+const viable=(state.clades||[]).find(c=>c.n>=5);
+const reps=viable?representativeMembers(viable,3):[];
+check('species portraits select real living members',reps.length>0&&reps.every(o=>state.organisms.includes(o)));
+check('species portraits expose up to three actual variants',!viable||reps.length===Math.min(3,viable.n));
 check('drawCreature does not throw at trait extremes', (() => {
   const c = wells.well.getContext('2d');
   try {
@@ -91,6 +106,7 @@ check('drawCreature does not throw at trait extremes', (() => {
       const o = makeOrganism(0,0,{speed:tr[0],size:tr[1],sense:tr[2],diet:tr[3]},1,
         {armor:true,venom:true,nocturnal:true,carnivore:true,claws:true,camouflage:true,pack:true,
          philopatry:true,courtship:true,latebreeder:true});
+      o.ad.flocking=o.ad.kinshare=o.ad.parentalcare=true;
       drawCreature(c, o, 8, {detail:true});
       drawCreature(c, o, 1, {detail:false});
     }

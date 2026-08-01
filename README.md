@@ -12,7 +12,7 @@ that's altered what the sim does.
 
 Drag the specimen well to pan; wheel or pinch to zoom. The overlaid controls provide
 Pause/Run, zoom, view reset, and fullscreen without leaving the well. Arrow keys pan,
-`+`/`-` zoom, and `0` resets the camera.
+`+`/`-` zoom up to 24×, and `0` resets the camera.
 
 ## The model
 
@@ -105,6 +105,27 @@ no geography required):
 |---|---|---|
 | Archipelago | 7/10 | mean 0.752 (1.0 = perfect sorting by side) |
 
+## Evolving anatomy
+
+Every organism inherits the same invented terrestrial ancestral skeleton: distinct
+skull and neck, four articulated limbs, feet, a muscular tail, and layered surface
+anatomy. Evolution modifies homologous parts instead of swapping species between
+unrelated stock animals. Speed lengthens distal limbs and narrows the stance, size is
+shown at a common scale, sense alters restrained eye anatomy, and diet reshapes the
+jaw from a soft-food cropper to a woody-food crusher.
+
+Physical adaptations are physical: armour becomes overlapping plates, venom uses
+fangs and glands, carnivores develop cutting teeth, claws attach to real digits,
+camouflage changes surface pattern, and courtship produces a crest. Pack hunting,
+site fidelity, breeding time, flocking, kin aid, and parental care remain external
+badges or live interaction cues because the model does not justify inventing organs
+for behaviours.
+
+The Specimens panel uses real living organisms. Each species receives a medoid
+representative plus two morphologically diverse members at 0.6× display scale, so
+polymorphism remains visible and the portrait never combines majority genes into a
+synthetic animal that may not exist.
+
 ## Predator–prey evolution
 
 The **Food Chain** scenario begins with prey only. Carnivory is a binary heritable
@@ -135,6 +156,44 @@ These are not labels applied after the fact. Actual mating and species detection
 the same compatibility function. In five deterministic 20,000-tick comparisons, the
 combined ecology alone speciated 3/5 times; enabling these developments produced
 speciation in 5/5 and reduced mean first-split time by more than half.
+
+## Social evolution
+
+The **Social Evolution** scenario models relationships between individuals rather
+than granting a species-wide cooperation score:
+
+- **Flocking** uses local alignment and cohesion. A carrier receives predator-confusion
+  benefit only while physical flockmates are nearby; clustering also concentrates
+  competitors onto the same food.
+- **Kin provisioning** transfers conserved energy from a well-fed carrier to a hungry
+  nearby parent, child, or sibling. Relatedness comes from recorded parents and
+  grandparents—not from sharing a species name.
+- **Parental care** transfers additional parental reserves into newborns. Juveniles
+  start safer from starvation, while adults have less energy for another reproduction.
+
+Three 30,000-tick seeds retained viable populations and repeatedly exercised all three
+behaviours. None fixed: final frequencies remained roughly 0.006–0.114, an honest
+low-to-moderate polymorphism rather than a universal “social is better” upgrade.
+
+## Living World: the free-for-all
+
+Choose **Living World** to stop isolating variables and turn every system loose:
+geography, two resources, seasons, day/night, learning, predation, obligate carnivory,
+all 13 binary adaptations, social behavior, and all three routes to reproductive
+isolation. It is the sandbox for “set a seed and watch history happen,” not a clean
+causal experiment.
+
+Five automatic events arrive at irregular intervals:
+
+- Drought and resource bloom temporarily alter food production.
+- Moderate random die-offs create genetic drift without repeatedly erasing 70% of life.
+- Resource turnover changes the types produced by existing sites.
+- Dispersal storms carry organisms across the divided habitat.
+
+The event sequence uses the simulation’s seeded RNG. Resetting the same seed recreates
+the same timing and effects exactly. Three measured 30,000-tick worlds all survived,
+experienced all five event types, retained all 13 adaptations, produced multiple
+species, and showed active predation, learning, flocking, kin aid, and parental care.
 
 ## Determinism
 

@@ -233,7 +233,7 @@ every visual property is read from a trait that already drives the simulation, s
 cannot invalidate a single science result. Confirmed: all 10 suites unchanged, 240
 checks passing, including every measured finding from M1-M8.
 
-### The mapping — nothing invented
+### Original M9 mapping — superseded 2026-08-01
 
 | visual | trait | why |
 |---|---|---|
@@ -247,13 +247,29 @@ checks passing, including every measured finding from M1-M8.
 
 ### The Specimens panel
 
-At well scale a creature is a few pixels; the morphology is barely legible. The panel
-draws each lineage's mean form side by side at full size, which is where 20,000 ticks
-of accumulated drift becomes something you can actually look at and compare.
+The original ellipse, long tail, forward eyes, diet hue, and symbolic overlays were a
+useful first pass but produced a mouse-like silhouette. Several mappings also claimed
+more biology than the simulation contained: speed-through-tail length is weak for a
+terrestrial organism, while site-fidelity fins and parental-care anatomy invented
+organs for behaviours.
 
-Draws the clade MEAN rather than a sampled individual deliberately: an individual
-would jitter frame to frame with whoever happened to be picked, reading as noise
-rather than as the lineage changing.
+**Revised 2026-08-01.** Every organism now retains one homologous invented terrestrial
+body plan: distinct skull/neck, muscular tapering tail, articulated fore- and
+hindlimbs, joints, feet, surface shading, and multiple screen-space detail levels.
+Speed acts through limb proportions, gait, stance, and torso width; sense acts through
+restrained eye anatomy; diet acts through a continuous jaw geometry. Size uses a fixed
+scale across the current species. Deep well zoom increased from 8× to 24×.
+
+Physical genes produce physical structures—overlapping armour, venom fangs/glands,
+carnivore dentition, distal claws, disruptive camouflage, nocturnal eyes, and the
+courtship crest. Pack hunting, site fidelity, breeding phase, flocking, kin aid, and
+parental care are external badges or interaction cues, never invented organs.
+
+The Specimens panel now chooses a stable living medoid nearest the clade mean, then
+farthest-samples two actual members to expose variation. This avoids both frame-to-
+frame jitter and the old synthetic majority-gene portrait, which could combine genes
+that no real organism carried. Every viable species receives a full-width field-guide
+cell; the panel grows vertically rather than hiding later lineages.
 
 ### Remaining from the SPORE evaluation, in owner's ranked order
 
@@ -292,7 +308,7 @@ the fallback IS the feature.
 ## Added — navigable specimen well (2026-08-01)
 
 The embedded and fullscreen well now share one world-space camera. Drag pans; wheel,
-pinch, buttons, and +/- keys zoom from 1× to 8× around the cursor or gesture midpoint.
+pinch, buttons, and +/- keys zoom from 1× to 24× around the cursor or gesture midpoint.
 Arrow keys pan, while double-click, the 1:1 button, or 0 resets the view. Camera state
 survives the canvas resize across fullscreen transitions. Pause/Run lives directly on
 the well as well as in the side panel, so fullscreen never hides simulation control.
@@ -435,6 +451,69 @@ Every enabled run remained viable. Mean first-split time (counting absent contro
 splits conservatively at 20,500) fell from 16,300 to 2,700 ticks. This establishes an
 acceleration of speciation in this model; it does not claim every individual barrier
 contributed equally without a future factorial experiment.
+
+## Added — Social Evolution (2026-08-01)
+
+Sociality is represented as local, heritable strategies with conserved costs—not an
+intelligence meter or a bonus applied to an entire species.
+
+- **Flocking (`≈`)** applies Reynolds-style local alignment and cohesion through a
+  spatial grid. The many-eyes/confusion escape bonus scales with physically nearby
+  flock carriers and is zero when alone. Grouping creates its own cost by sending
+  several competitors toward the same local food.
+- **Kin provisioning (`♥`)** records parents and grandparents and estimates recent
+  relatedness: parent/offspring and full siblings 0.5, half siblings 0.25. A fed
+  carrier can transfer energy only to nearby kin at relatedness >=0.25. Energy is
+  conserved exactly. This creates the conditions for kin selection; it does not
+  hardcode Hamilton’s rule as a guaranteed win.
+- **Parental care (`●`)** transfers 12% of each caring parent’s post-reproduction
+  reserve into the child. The juvenile benefit and adult opportunity cost are the
+  same conserved energy viewed from opposite sides.
+
+Measured at 30,000 ticks across seeds a/b/c:
+
+| Seed | Population | Flocking carrier-ticks | Kin transfers | Care energy | Final FLK/KIN/CARE |
+|---|---:|---:|---:|---:|---|
+| a | 450 | 167,872 | 506 | 6,350 | .009 / .082 / .049 |
+| b | 234 | 96,092 | 366 | 12,205 | .017 / .021 / .021 |
+| c | 361 | 107,220 | 2,584 | 12,180 | .006 / .111 / .114 |
+
+All populations survived and all behaviours executed repeatedly. None swept. That
+low-to-moderate persistence is the result to report; these runs do not establish that
+sociality always wins or that each strategy raises mean fitness in every ecology.
+
+## Added — Living World sandbox (2026-08-01)
+
+Living World is explicitly the opposite of the controlled scenarios: it enables all
+flags together—two-patch geography, seasons, day/night, learning, predation,
+carnivory, advanced/radiation/social adaptations, and assortative speciation. It does
+not replace any causal experiment; it is where interactions and contingent histories
+are allowed to become the result.
+
+An automatic seeded environment schedules an event every 800–1,600 ticks:
+
+- reversible drought or bloom using the existing shock restoration contract;
+- a moderate 20% indiscriminate die-off;
+- resource turnover at 34% of sites;
+- a dispersal storm moving 10% of organisms across the habitat.
+
+Events queue visible explanations and are stored in `state.environmentHistory`. Event
+selection and every affected target use the seeded simulation RNG, so the same seed
+replays the exact history. Patch shocks are never stacked: while one is active the
+scheduler chooses an instantaneous event, preserving the restoration invariant.
+
+Measured at 30,000 ticks:
+
+| Seed | Population | Auto events | Event types | Extant adaptations | Peak species |
+|---|---:|---:|---:|---:|---:|
+| a | 875 | 25 | 5/5 | 13/13 | 2 |
+| b | 790 | 24 | 5/5 | 13/13 | 2 |
+| c | 418 | 24 | 5/5 | 13/13 | 3 |
+
+Every run also produced hundreds of kills, thousands of social interactions, parental
+investment, and non-zero learned escape skill. These are viability/variety checks,
+not attribution: Living World is intentionally too confounded to say which pressure
+caused any one outcome.
 
 **Also fixed while building this, and must not regress:** `traitDistance()` divides
 by trait count, so adding wariness/plasticity to the set speciation measures over

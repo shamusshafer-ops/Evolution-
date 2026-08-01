@@ -128,10 +128,10 @@ if (typeof require !== 'undefined'){
     const html = fs.readFileSync(require('path').join(process.cwd(), 'src', 'shell.html'), 'utf8');
     check('the CSS explicitly restores display:none when #aboutPanel is hidden (see the "why" comment above)',
           /#aboutPanel\[hidden\]\s*\{[^}]*display\s*:\s*none/.test(html));
-    check('the Specimens panel contains a visible legend for hue, size, speed, sense, and adaptation marks',
-          /class="specimenLegend"/.test(html) && /Body hue/.test(html) && /Body width/.test(html) &&
-          /Long body \+ tail/.test(html) && /Large eyes/.test(html) && /armour, venom, nocturnal, carnivore/.test(html) &&
-          /claws, camouflage, pack hunting/.test(html) && /site fidelity, courtship crest, late breeding/.test(html));
+    check('the Specimens panel explains anatomy, scale, real representatives, and behavioural badges',
+          /class="specimenLegend"/.test(html) && /Shared skeleton/.test(html) && /Overall scale/.test(html) &&
+          /Long distal limbs \+ narrow stance/.test(html) && /Eye\/orbit size/.test(html) && /Jaw shape/.test(html) &&
+          /real living organisms/.test(html) && /external badges/.test(html) && /behaviours, not invented organs/.test(html));
     check('species adaptation icons expose a hover/focus explanation',
           /\.adGlyph:hover::after/.test(html) && /\.adGlyph:focus-visible::after/.test(html));
     check('the well exposes pause, zoom, reset, fullscreen, and pointer navigation in both layouts',

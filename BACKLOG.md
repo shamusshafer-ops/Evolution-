@@ -15,7 +15,7 @@
 |19| Artificial-selection mode | Player becomes the selective pressure; the Darwin-and-pigeon-breeders contrast. Ranked #4 by owner | M | Backlog |
 |7| Trait correlation view (scatter) | Are fast organisms also small? The ribbon cannot show joint distributions | M | Backlog |
 |8| Export run history as CSV | For anyone wanting to analyse outside the tool | S | Backlog |
-|9| Pinch-zoom / pan the specimen well | At 1400 organisms individuals are hard to follow | M | **Shipped 2026-08-01** — drag, wheel/pinch/buttons/keyboard, 8× zoom, persistent fullscreen camera, and in-view Pause/Run |
+|9| Pinch-zoom / pan the specimen well | At 1400 organisms individuals are hard to follow | M | **Shipped 2026-08-01** — drag, wheel/pinch/buttons/keyboard, 24× zoom, persistent fullscreen camera, and in-view Pause/Run |
 |10| Energy-cost breakdown inspector | Click an organism, see basal/travel/vision split | S | Backlog |
 |11| Mutation rate as a run parameter | Currently fixed per trait in data.js; exposing it is a strong teaching lever | S | Backlog |
 |12| Carrying-capacity readout | Population always saturates to food supply; make that visible rather than implicit | S | Backlog |
@@ -39,3 +39,6 @@
 |36| Heritable carnivory | Food Chain starts prey-only; obligate carnivores arise by mutation, inherit the role, cannot eat environmental food, and trigger a one-time emergence notification. Predator and prey guilds coexist across three measured seeds | M | **Shipped 2026-08-01** |
 |37| Advanced adaptation detail | Add visually and mechanically distinct strategies beyond armour and venom | M | **Shipped 2026-08-01** — claws, camouflage, and pack hunting; each inherited, visible, conditional, and announced |
 |38| Adaptive Radiation combination | Compose existing pressures and add developments that can evolve geographic, ecological, and temporal reproductive isolation | L | **Shipped 2026-08-01** — site fidelity, courtship crest, and late breeding; 5/5 vs 3/5 speciation in paired 20k runs |
+|39| Social evolution | Model real within-species grouping, kin-selected aid, and parent–offspring investment with individual costs | L | **Shipped 2026-08-01** — local flocking, pedigree-based provisioning, and energy-conserving parental care |
+|40| Seeded free-for-all world | Enable every genetic/ecological/social system with replayable random environmental history | L | **Shipped 2026-08-01** — Living World, five automatic event types, all 13 adaptations retained across three measured 30k runs |
+|41| Detailed representative species anatomy | Replace mouse-like ovals with one scientifically coherent evolving body plan and real within-species specimens | L | **Shipped 2026-08-01** — articulated terrestrial anatomy, honest physical/behavioural mappings, real medoid + variants, 24× inspection zoom |
