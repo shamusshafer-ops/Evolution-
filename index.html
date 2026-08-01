@@ -421,6 +421,8 @@ const VERSION = '0.1.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-07-30', tag:'M10', title:'Learning — mechanism built, headline result not yet reached',
+    text:'Two new traits: wariness (innate escape ability, present at birth) and plasticity (how fast an organism learns to escape from surviving a predator). Both cost neural upkeep, plasticity 2.5x more, because a plastic nervous system really is pricier to run than a hardwired one. Scoped as an experiment in the Baldwin effect — genetic assimilation, where a learned behaviour gets replaced by an inherited one once it is reliably useful — and honestly: that has not happened yet. Wariness rises under ordinary selection (0.09 → 0.23 over 30,000 ticks), but the learned component stays negligible, because a typical organism experiences under half a predation encounter in its entire life. Not enough experience to learn from. Documented as a known gap rather than hidden — see AGENTS.md for what a fix would need.' },
   { date:'2026-07-30', tag:'ui', title:'Fullscreen',
     text:'The specimen well pops out to fill the screen — button in its top-right corner, or press F. Escape brings it back. If the About panel happens to be open on top, Escape closes that first and a second press exits fullscreen, so you are never stuck. Uses real browser fullscreen where available and falls back to a full-viewport overlay on iOS, where element fullscreen does not exist.' },
   { date:'2026-07-30', tag:'M9', title:'Creatures you can actually look at',
@@ -523,8 +525,23 @@ const TRAITS = [
   { key:'diet',  label:'Diet',   min:0.00, max:1.00, init:0.50, sigma:0.030,
     color:'#6FD3A2', unit:'',
     blurb:'Which resource this organism digests. 0 and 1 are specialists, 0.5 a generalist. Carries no metabolic cost — the cost is opportunity.' },
+  /* --- Cognitive traits (M10) ---
+     Excluded from SPECIATION_TRAITS below: see traitDistance() in sim.js for why
+     that separation is load-bearing rather than cosmetic. */
+  { key:'wariness', label:'Wariness', min:0.00, max:1.00, init:0.05, sigma:0.030,
+    color:'#D9A441', unit:'',
+    blurb:'INNATE escape ability, present from birth. Costs a little neural upkeep — a hardwired circuit is cheap to run but must be found by mutation alone.' },
+  { key:'plasticity', label:'Plasticity', min:0.00, max:1.00, init:0.05, sigma:0.030,
+    color:'#7FD1AE', unit:'',
+    blurb:'How fast an organism LEARNS to escape from surviving near-misses. Costs more neural upkeep than wariness, and buys nothing at birth — you must live long enough to use it.' },
 ];
 const TRAIT_KEYS = TRAITS.map(t => t.key);
+
+/* Mate choice is assortative on ECOLOGICAL similarity — what you eat, where and how
+   you forage — not on cognition. Two organisms differing only in learning speed are
+   not reproductively isolated. Keeping this to the original four also holds
+   MATE.maxTraitDistance's M3 tuning valid; see traitDistance() in sim.js. */
+const SPECIATION_TRAITS = TRAITS.filter(t => ['speed','size','sense','diet'].includes(t.key));
 
 /* ---------- Mating ----------
    maxTraitDistance is the isolation knob and the whole basis of emergent speciation.
@@ -759,6 +776,75 @@ for (const a of ADAPTATIONS) ADAPT_BY_KEY[a.key] = a;
    contrast the whole system exists to show. */
 const ADAPT_MUTATE = 0.006;
 
+/* ---------- Learning ----------
+   Learned predator avoidance, plus the conditions for the BALDWIN EFFECT.
+
+   Two separate channels feed one phenotype (escape ability):
+
+     wariness    INNATE. Present at birth, cheap to run, but reachable only by
+                 mutation — a lineage cannot acquire it within a lifetime.
+     plasticity  LEARNED. Buys nothing at birth. An organism that survives a
+                 predation attempt gets better at escaping, accumulating `learned`
+                 toward a cap at a rate set by this trait. Costs more upkeep than
+                 wariness, because a plastic nervous system is more expensive to run
+                 than a hardwired one — this is real, and it is the asymmetry the
+                 whole effect turns on.
+
+   THE BALDWIN EFFECT, and why it is worth building rather than just asserting:
+   learning smooths the fitness landscape. An organism that can learn survives long
+   enough to reproduce in conditions where a purely innate organism of the same
+   genotype would die, so learning lets a population OCCUPY a region of trait space
+   selection could not otherwise reach. Then, once the population is there, learning's
+   costs (upkeep, plus a juvenile period spent not yet knowing) select for organisms
+   born already competent — innate wariness rises and reliance on plasticity falls.
+   Behaviour that had to be learned becomes inherited. Learned -> innate.
+
+   The measurable signature is therefore NOT "escape ability goes up". It is that the
+   SOURCE of escape ability shifts from learned to innate while the phenotype itself
+   holds roughly steady. That is what test-learning.js checks.
+
+   Gated behind cfg.learning for the same reason predation and adaptations are: it
+   must not silently alter any M1-M9 measurement. */
+const LEARNING = {
+  maxLearned:    0.55,   // ceiling on the learned component of escape
+  gainPerEscape: 0.85,   /* Fraction of remaining headroom gained per survived attempt.
+                            Deliberately near-total: this is ONE-TRIAL LEARNING, and
+                            the value was raised from 0.16 after measurement forced
+                            the issue. At 0.16 an organism needed many escapes to
+                            acquire useful skill, but measurement showed a typical
+                            organism experiences under 0.5 predation attempts in its
+                            ENTIRE LIFE (2.9-13.8 attempts per organism per 20,000
+                            ticks against a median lifespan of ~671). Multi-trial
+                            learning is therefore mathematically unreachable in this
+                            ecology, and `learned` sat at exactly 0.000 no matter how
+                            predator density was tuned.
+                            One-trial learning is not a workaround but the better
+                            model: single-exposure aversive conditioning is exactly
+                            how real predator avoidance is acquired. An animal that
+                            needs several near-deaths to learn what a predator is
+                            will not survive to use the lesson. */
+  warinessCost:  0.004,  // flat metabolic upkeep per unit of innate wariness
+  plasticityCost:0.010,  // 2.5x wariness: a plastic nervous system costs more to run
+                         // than a hardwired one. This asymmetry is what makes
+                         // assimilation profitable once the behaviour is common.
+  escapeWeight:  0.90,   // how strongly total escape ability converts to escape odds
+
+  /* A BOOTSTRAPPING problem, found by measurement and fixed deliberately rather than
+     by tuning until the answer appeared. With escapeWeight at 0.55 and the original
+     costs, a founder escaped just 3.6% of attempts, so a learning event was
+     vanishingly rare — while plasticity's upkeep was charged every tick from birth.
+     Selection therefore eliminated plasticity long before it could ever demonstrate
+     its value, and measured `learned` sat at exactly 0.000 forever.
+
+     This is a real feature of the Baldwin effect and not an artefact: learning cannot
+     be selected for until it is USED, so the escape channel must be strong enough,
+     and cheap enough, for the first learners to survive and reproduce. The costs are
+     lowered and the weight raised so that a modest plasticity converts into a real
+     survival difference within one lifetime. The 2.5x wariness:plasticity ratio — the
+     asymmetry assimilation actually depends on — is preserved exactly. */
+  juvenileGrace: 0,      // reserved: ticks before neural upkeep begins being charged
+};
+
 /* ---------- Day / night ----------
    Short cycle relative to a generation (~185 ticks), so an organism experiences many
    day/night transitions in its life and the nocturnal gene is a strategy rather than
@@ -857,6 +943,11 @@ const SCENARIOS = [
 
   { id:'wild',      name:'Wild',       blurb:'Everything at once: predators, day and night, and all three adaptations in play. Armour, venom and nocturnality each pay off only under the right conditions.',
     patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34, predation:true, adaptations:true, dayNight:true } },
+
+  /* The Baldwin experiment. Identical to Predation in every respect except that
+     organisms can learn, so any difference in outcome is learning and nothing else. */
+  { id:'baldwin',   name:'Baldwin',    blurb:'Predators, and organisms that learn to escape them. Watch innate wariness slowly replace learned skill — behaviour that had to be learned becoming inherited.',
+    patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34, predation:true, learning:true } },
 
   { id:'predation', name:'Predation',  blurb:'Same food as Temperate, but large organisms can eat smaller ones. Size finally buys something proportional to what it costs.',
     patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34, predation:true } },
@@ -973,7 +1064,28 @@ function metabolicCost(o){
   const basal  = METAB.basalCoef  * Math.pow(m, METAB.basalExp);
   const travel = METAB.travelCoef * m * o.speed * o.speed;
   const vision = METAB.visionCoef * o.sense * o.sense;
-  return basal + travel + vision + adaptationCost(o);
+  return basal + travel + vision + adaptationCost(o) + cognitionCost(o);
+}
+
+/* Neural upkeep. Charged only where learning is enabled, so cognitive traits are
+   free baggage in every scenario that predates M10 and cannot shift those results.
+   Plasticity costs ~2.5x wariness per unit: a plastic nervous system is genuinely
+   more expensive to run than a hardwired reflex, and that asymmetry is the engine of
+   genetic assimilation — once a behaviour is reliably needed, being born with it
+   undercuts learning it. */
+function cognitionCost(o){
+  if (!state.cfg.learning) return 0;
+  return LEARNING.warinessCost * (o.wariness || 0)
+       + LEARNING.plasticityCost * (o.plasticity || 0);
+}
+
+/* Total escape ability: innate floor plus whatever this individual has learned.
+   An organism is born with only its wariness — plasticity buys nothing until it has
+   survived something, which is the juvenile cost that makes learning a real tradeoff
+   rather than a free upgrade. */
+function escapeAbility(o){
+  if (!state.cfg.learning) return 0;
+  return Math.min(1, (o.wariness || 0) + (o.learned || 0));
 }
 
 /* Upkeep for every adaptation an organism carries. Each has its own scaling exponent
@@ -1027,6 +1139,8 @@ function makeOrganism(x, y, traits, gen, adapt){
     id: state.nextId++,
     clade: 0,
     predCooldown: 0,
+    learned: 0,          // within-lifetime escape skill; NOT inherited (that is the point)
+    escapes: 0,          // near-misses survived, for inspection
     ad: {},              // discrete adaptation genes; see ADAPTATIONS in data.js
     x, y,
     dir: rnd() * Math.PI * 2,
@@ -1221,13 +1335,26 @@ function findFood(o, fg){
 function traitDistance(a, b){
   // Normalised Euclidean distance in trait space, so traits on wildly different
   // scales (sense spans 4..150, diet spans 0..1) contribute comparably.
+  //
+  // Measured over SPECIATION_TRAITS, not all of TRAITS, and that distinction is
+  // load-bearing. This function divides by the trait count, so every trait added to
+  // the model would shrink the distance a given divergence produces: a full split on
+  // one axis yields 0.50 across 4 traits but only 0.41 across 6. Adding cognitive
+  // traits to the set would therefore have silently raised the bar for speciation and
+  // invalidated M3's tuning of MATE.maxTraitDistance (0.12) along with every result
+  // built on it — with nothing failing loudly to say so.
+  //
+  // Excluding them is also the more defensible model, not merely the convenient one:
+  // mate choice here is assortative on ECOLOGICAL similarity — what you eat, where you
+  // forage, how you move. Two organisms that differ only in how quickly they learn are
+  // not thereby reproductively isolated.
   let acc = 0;
-  for (const t of TRAITS){
+  for (const t of SPECIATION_TRAITS){
     const span = t.max - t.min;
     const d = (a[t.key] - b[t.key]) / span;
     acc += d * d;
   }
-  return Math.sqrt(acc / TRAITS.length);
+  return Math.sqrt(acc / SPECIATION_TRAITS.length);
 }
 
 function reproduceSexual(a, b){
@@ -1523,8 +1650,21 @@ function predationPass(){
        would collapse into a size runaway — the escape term is what keeps speed
        worth paying for and keeps the tradeoff two-sided. */
     const speedAdv = (prey.speed - pred.speed) / Math.max(0.001, pred.speed);
-    const pEscape = clamp(speedAdv * PREDATION.escapeMul, 0, 0.95);
-    if (rnd() < pEscape){ state.stats.escapes = (state.stats.escapes||0) + 1; continue; }
+    let pEscape = clamp(speedAdv * PREDATION.escapeMul, 0, 0.95);
+    // Escape ability (innate wariness + learned skill) adds to the speed-based odds.
+    pEscape = clamp(pEscape + escapeAbility(prey) * LEARNING.escapeWeight, 0, 0.95);
+    if (rnd() < pEscape){
+      state.stats.escapes = (state.stats.escapes||0) + 1;
+      // Surviving a near-miss is the learning event. Gain is a fraction of REMAINING
+      // headroom, so skill rises fast at first and plateaus — diminishing returns,
+      // which is how skill acquisition actually behaves.
+      if (state.cfg.learning && prey.plasticity > 0){
+        const head = LEARNING.maxLearned - prey.learned;
+        if (head > 0) prey.learned += head * LEARNING.gainPerEscape * prey.plasticity;
+      }
+      prey.escapes = (prey.escapes || 0) + 1;
+      continue;
+    }
 
     eaten[target] = 1;
     pred.energy += prey.energy * PREDATION.efficiency;

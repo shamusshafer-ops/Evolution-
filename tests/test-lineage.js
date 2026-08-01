@@ -111,9 +111,15 @@ computeSpecies(); computeSpecies();
 check('stable recomputes do not consume new ids', state.nextLineageId === idBefore);
 
 /* --- end-to-end on a real run --- */
+/* 30k, not 20k. Speciation has a stochastic waiting time (median ~17k, measured in
+   M3), so any fixed window is a bet on the seed. M10 added two cognitive traits,
+   which shifted the RNG draw sequence and moved seed 'a''s split past the old 20k
+   boundary — the mechanism was unchanged, the sample point was simply unlucky. A
+   window comfortably past the measured median is the fix; tightening it again would
+   just re-arm the same trap for the next change that touches the RNG. */
 initWorld({seed:'a', scenario:'oasis'});
 let splits = 0, ids = new Set();
-for(let i=1;i<=20000;i++){
+for(let i=1;i<=30000;i++){
   step();
   if(i % 240 === 0){
     for(const c of (state.clades||[])){

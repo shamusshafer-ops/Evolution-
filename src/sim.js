@@ -90,7 +90,28 @@ function metabolicCost(o){
   const basal  = METAB.basalCoef  * Math.pow(m, METAB.basalExp);
   const travel = METAB.travelCoef * m * o.speed * o.speed;
   const vision = METAB.visionCoef * o.sense * o.sense;
-  return basal + travel + vision + adaptationCost(o);
+  return basal + travel + vision + adaptationCost(o) + cognitionCost(o);
+}
+
+/* Neural upkeep. Charged only where learning is enabled, so cognitive traits are
+   free baggage in every scenario that predates M10 and cannot shift those results.
+   Plasticity costs ~2.5x wariness per unit: a plastic nervous system is genuinely
+   more expensive to run than a hardwired reflex, and that asymmetry is the engine of
+   genetic assimilation — once a behaviour is reliably needed, being born with it
+   undercuts learning it. */
+function cognitionCost(o){
+  if (!state.cfg.learning) return 0;
+  return LEARNING.warinessCost * (o.wariness || 0)
+       + LEARNING.plasticityCost * (o.plasticity || 0);
+}
+
+/* Total escape ability: innate floor plus whatever this individual has learned.
+   An organism is born with only its wariness — plasticity buys nothing until it has
+   survived something, which is the juvenile cost that makes learning a real tradeoff
+   rather than a free upgrade. */
+function escapeAbility(o){
+  if (!state.cfg.learning) return 0;
+  return Math.min(1, (o.wariness || 0) + (o.learned || 0));
 }
 
 /* Upkeep for every adaptation an organism carries. Each has its own scaling exponent
@@ -144,6 +165,8 @@ function makeOrganism(x, y, traits, gen, adapt){
     id: state.nextId++,
     clade: 0,
     predCooldown: 0,
+    learned: 0,          // within-lifetime escape skill; NOT inherited (that is the point)
+    escapes: 0,          // near-misses survived, for inspection
     ad: {},              // discrete adaptation genes; see ADAPTATIONS in data.js
     x, y,
     dir: rnd() * Math.PI * 2,
@@ -338,13 +361,26 @@ function findFood(o, fg){
 function traitDistance(a, b){
   // Normalised Euclidean distance in trait space, so traits on wildly different
   // scales (sense spans 4..150, diet spans 0..1) contribute comparably.
+  //
+  // Measured over SPECIATION_TRAITS, not all of TRAITS, and that distinction is
+  // load-bearing. This function divides by the trait count, so every trait added to
+  // the model would shrink the distance a given divergence produces: a full split on
+  // one axis yields 0.50 across 4 traits but only 0.41 across 6. Adding cognitive
+  // traits to the set would therefore have silently raised the bar for speciation and
+  // invalidated M3's tuning of MATE.maxTraitDistance (0.12) along with every result
+  // built on it — with nothing failing loudly to say so.
+  //
+  // Excluding them is also the more defensible model, not merely the convenient one:
+  // mate choice here is assortative on ECOLOGICAL similarity — what you eat, where you
+  // forage, how you move. Two organisms that differ only in how quickly they learn are
+  // not thereby reproductively isolated.
   let acc = 0;
-  for (const t of TRAITS){
+  for (const t of SPECIATION_TRAITS){
     const span = t.max - t.min;
     const d = (a[t.key] - b[t.key]) / span;
     acc += d * d;
   }
-  return Math.sqrt(acc / TRAITS.length);
+  return Math.sqrt(acc / SPECIATION_TRAITS.length);
 }
 
 function reproduceSexual(a, b){
@@ -640,8 +676,21 @@ function predationPass(){
        would collapse into a size runaway — the escape term is what keeps speed
        worth paying for and keeps the tradeoff two-sided. */
     const speedAdv = (prey.speed - pred.speed) / Math.max(0.001, pred.speed);
-    const pEscape = clamp(speedAdv * PREDATION.escapeMul, 0, 0.95);
-    if (rnd() < pEscape){ state.stats.escapes = (state.stats.escapes||0) + 1; continue; }
+    let pEscape = clamp(speedAdv * PREDATION.escapeMul, 0, 0.95);
+    // Escape ability (innate wariness + learned skill) adds to the speed-based odds.
+    pEscape = clamp(pEscape + escapeAbility(prey) * LEARNING.escapeWeight, 0, 0.95);
+    if (rnd() < pEscape){
+      state.stats.escapes = (state.stats.escapes||0) + 1;
+      // Surviving a near-miss is the learning event. Gain is a fraction of REMAINING
+      // headroom, so skill rises fast at first and plateaus — diminishing returns,
+      // which is how skill acquisition actually behaves.
+      if (state.cfg.learning && prey.plasticity > 0){
+        const head = LEARNING.maxLearned - prey.learned;
+        if (head > 0) prey.learned += head * LEARNING.gainPerEscape * prey.plasticity;
+      }
+      prey.escapes = (prey.escapes || 0) + 1;
+      continue;
+    }
 
     eaten[target] = 1;
     pred.energy += prey.energy * PREDATION.efficiency;

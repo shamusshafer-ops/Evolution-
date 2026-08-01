@@ -289,6 +289,57 @@ fallback is not a degraded path: iOS Safari does not support `requestFullscreen`
 arbitrary elements at all, so on the platform where a popped-out view is most useful,
 the fallback IS the feature.
 
+## In progress — M10: learning (mechanism built, headline result not reached)
+
+Two cognitive traits: `wariness` (innate, present at birth) and `plasticity` (how
+fast an organism learns to escape a predator by surviving an attempt). Scoped as an
+experiment in the **Baldwin effect** -- the classic result that learning smooths a
+fitness landscape and lets a population reach a peak that pure genetics cannot,
+after which the learned behaviour gets replaced by an inherited one because being
+born already competent outcompetes needing to learn it. Owner explicitly wanted
+genetic assimilation as the headline result.
+
+**It has not happened.** Wariness rises under ordinary direct selection (0.09 ->
+0.23 over 30,000 ticks in the new `baldwin` scenario) but the learned component
+stays at ~0.005-0.01 -- negligible. Without a meaningful learned contribution there
+is nothing to assimilate.
+
+**Root cause, measured rather than guessed at:** a typical organism experiences
+under 0.5 predation attempts in its entire life (2.9-13.8 attempts per organism per
+20,000 ticks against a median lifespan of ~671, confirmed as the bottleneck by
+pushing predator density to extremes -- it stayed near zero regardless). Learning
+from experience cannot bootstrap when the experience essentially never happens.
+
+**Two fixes already tried and insufficient on their own:**
+1. Lowered cognitive-trait costs, raised `LEARNING.escapeWeight` 0.55->0.90, so a
+   founder's baseline escape chance rose from ~3.6% to something survivable. Real
+   improvement (plasticity now correctly rises under selection, 0.05 -> 0.28-0.41)
+   but did not fix the learned-component problem on its own.
+2. Switched to ONE-TRIAL learning (`gainPerEscape` 0.16 -> 0.85) on the theory that
+   multi-trial learning is mathematically unreachable in this ecology. Defensible
+   biology (single-exposure aversive conditioning is real), moved `learned` off
+   exactly 0.000, still nowhere near enough.
+
+**What is needed next, not yet attempted:** an ECOLOGICAL change, not more constant
+tuning. Encounters per lifetime must rise by roughly an order of magnitude for
+one-trial learning to matter statistically across a population. That likely means a
+distinct high-encounter/low-lethality predation regime -- many survivable near-
+misses rather than few fatal attempts -- built as its OWN scenario config so M5's
+measured predation numbers (mean size 0.67 -> 1.80, the bistability result) are not
+touched. Do not tune the shared `PREDATION` constants to chase this; add scenario-
+specific overrides the way `seasonal`, `twoPatches` and `singleResource` already do.
+
+**Also fixed while building this, and must not regress:** `traitDistance()` divides
+by trait count, so adding wariness/plasticity to the set speciation measures over
+would have silently shrunk every distance a given divergence produces and
+invalidated M3's `MATE.maxTraitDistance` tuning (0.12) with nothing failing loudly.
+Speciation distance now measures over an explicit `SPECIATION_TRAITS` subset (the
+four ecological traits only) rather than all of `TRAITS`. `test-learning.js` pins
+this with a direct check; do not fold cognitive traits back into that set without
+re-deriving the isolation threshold the way M3's sweep did.
+
+Full state and conventions for whoever (human or agent) picks this up: `AGENTS.md`.
+
 ## Standing practice — in-app changelog
 
 Every future change that alters what the sim DOES gets a `CHANGELOG` entry in

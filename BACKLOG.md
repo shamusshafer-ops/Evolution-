@@ -35,3 +35,4 @@
 |32| Eras / unlock thresholds | Owner-ranked #2. Thresholds unlocking new trait axes. Riskiest item: badly done it becomes a skill tree with evolution flavouring | L | Next up |
 |33| Follow a lineage (camera + filtered UI) | Owner-ranked #3. Cheap now that lineage ids persist (M8) | M | Backlog |
 |34| Compress the timeline | Owner-ranked #4. Measured: first event at ~216s at 1x; two scenarios produce none in 30k ticks | S | Backlog |
+|35| Learning / Baldwin effect | Mechanism built (wariness, plasticity, one-trial learning), gated behind cfg.learning. Assimilation not yet demonstrated -- needs a high-encounter/low-lethality predation regime as its own scenario, not shared-constant tuning. See ROADMAP + AGENTS.md | L | In progress |
