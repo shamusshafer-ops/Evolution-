@@ -127,45 +127,57 @@ if (typeof require !== 'undefined'){
   }
 }
 
-/* --- speciation notifications: peak-tracking, not raw count ---
-   Fires when the viable species count exceeds the highest ever seen this run, so a
-   clade wobbling across the n>=5 viability threshold cannot fire a duplicate
-   notification for a split that already happened. */
+/* --- speciation notifications: driven by recorded lineage EVENTS ---
+   Rewritten when lineage tracking landed. The previous version of these tests
+   fabricated state.clades by hand with no `event` field, because the old detector
+   inferred "something split" from the viable-count rising above its previous peak.
+   That inference no longer exists: the lineage matcher records split/merge/new
+   directly, so notifications now read a fact rather than deduce one. The wobble
+   guard those tests protected is likewise obsolete — a clade dipping below the
+   viability threshold and recovering produces no new split event, so there is
+   nothing to double-fire. */
 els.toasts = { children: [], appendChild(el){ this.children.push(el); }, innerHTML:'' };
 els.wellFlash = { classList:{ _has:false, add(){ this._has=true; }, remove(){ this._has=false; } }, offsetWidth:0 };
 
 initWorld({seed:'evtA', scenario:'temperate'});
-check('peakSpeciesSeen starts at 1', state.peakSpeciesSeen === 1);
 check('events queue starts empty', state.events.length === 0);
 
-/* Directly exercise detectSpeciation() rather than running 15k+ ticks — the
-   MECHANISM is what these tests own; the empirical timing (median ~17k ticks) is
-   already pinned in test-speciation.js and doesn't need re-proving here. */
-state.clades = [{id:0, n:200}, {id:1, n:40}];   // simulate a fresh 2-species state
+/* Exercise detectSpeciation() against clades shaped the way computeSpecies()
+   actually produces them, rather than against invented ones. */
+state.clades = [{id:0, n:200, event:null, from:null}, {id:1, n:40, event:'split', from:[0]}];
 detectSpeciation();
-check('a genuine increase fires exactly one event', state.events.length === 1);
-check('peakSpeciesSeen updates to the new count', state.peakSpeciesSeen === 2);
-check('the event names the SMALLER of the two clades (the split heuristic)',
+check('a recorded split fires exactly one event', state.events.length === 1);
+check('the event names the ACTUAL new lineage, not merely the smallest',
       state.events[0].name === cladeName(1));
+check('the event names the parent lineage exactly', state.events[0].parent === cladeName(0));
 
-state.events = [];   // simulate the UI having drained it
-detectSpeciation();  // count is still 2 -- no new peak
-check('re-detecting at the same peak does not fire again', state.events.length === 0);
+state.events = [];
+state.clades = [{id:0, n:200, event:null, from:null}, {id:1, n:40, event:null, from:null}];
+detectSpeciation();
+check('a steady two-lineage state fires nothing (no event recorded)', state.events.length === 0);
 
-// simulate a wobble: count dips to 1 then back to 2 -- must NOT re-fire
-state.clades = [{id:0, n:200}];
+/* A clade dipping below viability and recovering must not fire — under the old
+   count-based detector this was the wobble case that needed a peak guard. */
+state.clades = [{id:0, n:200, event:null, from:null}, {id:1, n:3, event:null, from:null}];
 detectSpeciation();
-check('a dip below peak does not fire (only INCREASES matter)', state.events.length === 0);
-state.clades = [{id:0, n:200}, {id:1, n:38}];
+state.clades = [{id:0, n:200, event:null, from:null}, {id:1, n:40, event:null, from:null}];
 detectSpeciation();
-check('returning to a previously-seen peak does not re-fire (this is the wobble guard)',
-      state.events.length === 0);
+check('a viability wobble fires nothing (no split was recorded)', state.events.length === 0);
 
-// a genuine THIRD species must still fire
-state.clades = [{id:0, n:150}, {id:1, n:60}, {id:2, n:20}];
+/* Unviable splits are ignored — a "split" of 2 organisms is noise, not a species. */
+state.events = [];
+state.clades = [{id:0, n:200, event:null, from:null}, {id:9, n:2, event:'split', from:[0]}];
 detectSpeciation();
-check('a new peak beyond the previous one fires again', state.events.length === 1);
-check('peakSpeciesSeen tracks the new peak', state.peakSpeciesSeen === 3);
+check('a split too small to be viable does not fire', state.events.length === 0);
+
+/* Merges are announced too: a name vanishing from the list with no explanation
+   would be worse than saying what happened. */
+state.events = [];
+state.clades = [{id:0, n:240, event:'merge', from:[1]}];
+detectSpeciation();
+check('a recorded merge fires an event', state.events.length === 1);
+check('the merge event is typed distinctly from a speciation', state.events[0].type === 'merge');
+check('the merge names what was absorbed', state.events[0].absorbed[0] === cladeName(1));
 
 /* --- UI drain: renders a toast per event, clears the queue, triggers the flash --- */
 state.events = [{ type:'speciation', tick:1000, name:'Ember', n:42, totalSpecies:2 }];

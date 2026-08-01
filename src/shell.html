@@ -69,6 +69,8 @@
     animation:toastIn 0.25s ease-out, toastOut 0.4s ease-in 4.6s forwards;
   }
   .toast b{ color:var(--food); }
+  .toast.merge{ border-color:var(--chalk-dim); }
+  .toast.merge b{ color:var(--chalk); }
   @keyframes toastIn{ from{ transform:translateY(8px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
   @keyframes toastOut{ to{ transform:translateY(-6px); opacity:0; } }
   @media (prefers-reduced-motion: reduce){

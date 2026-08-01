@@ -169,6 +169,54 @@ time (not sim ticks), so it reads the same at 1x and 20x speed. Reset clears any
 toast still on screen from the previous run rather than leaving it naming a species
 that no longer exists.
 
+## Status
+
+**M8 shipped (2026-07-30).** Lineage tracking. 238 tests. Closes #2, #18 and #29.
+
+### Identity by descent, not by rank
+
+`computeSpecies()` answers "which organisms interbreed right now" — a fact about the
+present. Identity is a fact about history and cannot be derived from the present
+alone. Previously clade ids were assigned by population RANK on every sample, so
+"clade 0" meant "whichever group is biggest at this instant", and a lineage's id —
+and therefore its name and colour — changed the moment two groups swapped size.
+
+Lineages are now matched between consecutive samples by membership overlap
+(`LINEAGE_MATCH_FRAC`, 34% of a group's prior-sample members). Ids are monotonic and
+never reused, so ancestry stays unambiguous.
+
+### Merges were the reason this needed care
+
+`MATE.maxTraitDistance` is a threshold, not a wall: two lineages that diverged can
+drift back within range and resume interbreeding. A naive matcher would silently
+reassign one lineage's members to the other's id and the recorded ancestry would be
+quietly wrong with **nothing to flag it** — the worst kind of bug, because it
+produces plausible output. So the matcher classifies explicitly:
+
+| current group draws from | classified as |
+|---|---|
+| one prior lineage | continuation |
+| two or more prior lineages | **merge** (largest id survives, others recorded in `from`) |
+| one prior lineage already continued by another group | **split** (new id, parent recorded) |
+| nothing prior | genuinely new |
+
+Verified by construction rather than by waiting for one to occur: two separated
+groups converged in trait space produce `0:60[merge from [1]]` — one lineage, the
+absorbed one explicitly recorded.
+
+### Closes three backlog items
+
+- **#18 (colour flicker)** — colour and name key off the lineage id, which no longer
+  changes with rank. Measured across a 22,000-tick oasis run: zero colour changes.
+- **#29 (notification names the smallest clade)** — the matcher records which group
+  is genuinely new, so the toast now reads "Brine split from Ash" with exact
+  parentage instead of inferring newness from size.
+- **#2 (lineage tracking)** itself. The phylogeny VIEW described in the original
+  scoping is not built; the data it needs now exists.
+
+Merges are announced too. A lineage rejoining another is as real an event as a split,
+and staying silent would leave a name vanishing from the species list unexplained.
+
 ## Standing practice — in-app changelog
 
 Every future change that alters what the sim DOES gets a `CHANGELOG` entry in

@@ -134,6 +134,7 @@ function drainEvents(){
   const events = state.events; state.events = [];
   for (const ev of events){
     if (ev.type === 'speciation') showSpeciationToast(ev);
+    else if (ev.type === 'merge') showMergeToast(ev);
   }
 }
 function showSpeciationToast(ev){
@@ -141,7 +142,11 @@ function showSpeciationToast(ev){
   if (host){
     const el = document.createElement('div');
     el.className = 'toast';
-    const label = ev.name ? `<b>${ev.name}</b> has emerged` : 'A new species has emerged';
+    // Naming the parent is now exact rather than inferred — the lineage matcher
+    // records which lineage a split descended from.
+    const label = ev.parent
+      ? `<b>${ev.name}</b> split from <b>${ev.parent}</b>`
+      : `<b>${ev.name}</b> has emerged`;
     el.innerHTML = `${label} — ${ev.totalSpecies} species now, ${ev.n} organisms.`;
     host.appendChild(el);
     // Remove after the CSS animation finishes rather than relying on the animation's
@@ -155,6 +160,21 @@ function showSpeciationToast(ev){
     void flash.offsetWidth;   // force reflow so re-adding the class restarts the animation
                               // if a second split happens before the first pulse finishes
     flash.classList.add('pulse');
+  }
+}
+
+/* A merge is as real an event as a split. Without announcing it, a name would simply
+   vanish from the species list with no explanation. Styled distinctly so it does not
+   read as a new species appearing. */
+function showMergeToast(ev){
+  const host = $('toasts');
+  if (host){
+    const el = document.createElement('div');
+    el.className = 'toast merge';
+    const gone = (ev.absorbed||[]).map(n=>`<b>${n}</b>`).join(', ');
+    el.innerHTML = `${gone} rejoined <b>${ev.name}</b> — ${ev.totalSpecies} species now.`;
+    host.appendChild(el);
+    setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 5100);
   }
 }
 

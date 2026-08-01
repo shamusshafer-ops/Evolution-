@@ -64,6 +64,8 @@ function makeState(opts){
     clades: [],           // emergent species, recomputed in sampleHistory()
     activeShocks: [],     // shocks currently overlaying cfg, with restore snapshots
     peakSpeciesSeen: 1,    // highest viable species count observed this run; drives notifications
+    nextLineageId: 0,      // monotonic; a lineage id is never reused, so ancestry stays unambiguous
+    lineageOf: new Map(),  // organism id -> lineage id, as of the last computeSpecies() call
     events: [],            // queued notifications for the UI to drain (speciation, etc.)
     foodCarry: 0,
     running: false,
@@ -746,6 +748,101 @@ function matingPass(){
    not with C, all three land in one component. That is the ring-species problem, and
    it is real biology rather than a bug — species boundaries genuinely are fuzzy under
    the interbreeding definition. */
+/* ---------- Persistent lineage identity ----------
+   computeSpecies() below finds WHICH organisms currently form interbreeding groups.
+   That is a fact about the present moment. This layer answers a different question:
+   is the group I'm looking at now the SAME lineage as one I saw before?
+
+   Before this existed, clade ids were assigned by population rank on every sample —
+   so "clade 0" was simply "whichever group is biggest right now", and a lineage's id
+   (and therefore its name and colour) changed the instant two groups swapped rank.
+   That is why colours flickered and why the speciation notification had to guess at
+   which clade was new by picking the smallest.
+
+   Identity is assigned by DESCENT, matched on organism-membership overlap between
+   consecutive samples. Each lineage gets a stable numeric id that outlives rank
+   changes.
+
+   The hard case, and the reason this needed care rather than just a parentId field:
+   MATE.maxTraitDistance is a threshold, not a wall. Two lineages that diverged can
+   drift back within range and resume interbreeding — a real phenomenon, and if the
+   matcher ignored it, one lineage's members would be silently reassigned to the
+   other's id and the recorded ancestry would be quietly wrong with nothing to flag
+   it. So merges are detected and recorded explicitly:
+
+     - a current group whose members came mostly from ONE prior lineage  -> continues that lineage
+     - a current group drawing substantially from TWO OR MORE            -> a MERGE
+     - two current groups both descending from one prior lineage         -> a SPLIT
+     - a group matching nothing prior                                    -> genuinely new
+
+   Overlap is measured against the prior sample's membership by organism id. Organisms
+   die and are born between samples, so the match is fractional, not exact. */
+const LINEAGE_MATCH_FRAC = 0.34;   // share of a group's prior-sample members that must
+                                   // come from one lineage for it to count as a source
+
+function matchLineages(clusters, pop){
+  const prev = state.lineageOf || new Map();   // organism id -> lineage id, from last sample
+  const next = new Map();
+  const results = [];
+  const usedContinuation = new Map();          // lineage id -> index of the group already continuing it
+
+  // For each current group, tally which prior lineages its members came from.
+  const tallies = clusters.map(idx => {
+    const counts = new Map();
+    let known = 0;
+    for (const i of idx){
+      const lid = prev.get(pop[i].id);
+      if (lid == null) continue;               // born since the last sample; carries no prior id
+      counts.set(lid, (counts.get(lid)||0) + 1);
+      known++;
+    }
+    return { counts, known };
+  });
+
+  clusters.forEach((idx, k) => {
+    const { counts, known } = tallies[k];
+    const sources = [...counts.entries()]
+      .filter(([, c]) => known > 0 && c / known >= LINEAGE_MATCH_FRAC)
+      .sort((a, b) => b[1] - a[1])
+      .map(([lid]) => lid);
+
+    let lineageId, event = null, from = null;
+
+    if (!sources.length){
+      // Nothing recognisable — a genuinely new lineage. Also the path every group
+      // takes on the very first sample of a run.
+      lineageId = state.nextLineageId++;
+      event = state.tick > 0 ? 'new' : null;
+    } else if (sources.length >= 2){
+      // MERGE: this group draws substantially from more than one prior lineage.
+      // The largest contributor's id survives; the others are recorded as merged in
+      // so the event is visible rather than silently swallowed.
+      lineageId = sources[0];
+      event = 'merge';
+      from = sources.slice(1);
+    } else {
+      const src = sources[0];
+      if (usedContinuation.has(src)){
+        // A second group also descends from this lineage — that is a SPLIT. The
+        // larger group (seen first, since clusters arrive largest-first) keeps the
+        // parent id; this one becomes a new lineage with a recorded parent.
+        lineageId = state.nextLineageId++;
+        event = 'split';
+        from = [src];
+      } else {
+        lineageId = src;                        // ordinary continuation
+        usedContinuation.set(src, k);
+      }
+    }
+
+    for (const i of idx) next.set(pop[i].id, lineageId);
+    results.push({ lineageId, event, from });
+  });
+
+  state.lineageOf = next;
+  return results;
+}
+
 function computeSpecies(){
   const pop = state.organisms;
   const n = pop.length;
@@ -774,16 +871,25 @@ function computeSpecies(){
   // Order largest-first and drop singleton noise into their own entries anyway —
   // a lone unmatable organism IS a (doomed) species under this definition.
   const clusters = [...groups.values()].sort((a,b) => b.length - a.length);
+
+  // Assign persistent identity by descent BEFORE building the output, so `id` is a
+  // stable lineage id rather than this sample's rank. Rank still determines display
+  // order (largest first reads best) but no longer determines identity.
+  const matched = matchLineages(clusters, pop);
+
   const out = clusters.map((idx, k) => {
     const members = idx.map(i => pop[i]);
-    const c = { id:k, n:members.length, traits:{} };
+    const c = { id: matched[k].lineageId, rank: k, n: members.length,
+                event: matched[k].event, from: matched[k].from, traits:{} };
     for (const t of TRAITS){
       let s = 0; for (const m of members) s += m[t.key];
       c.traits[t.key] = s / members.length;
     }
     return c;
   });
-  for (let k = 0; k < clusters.length; k++) for (const i of clusters[k]) pop[i].clade = k;
+  for (let k = 0; k < clusters.length; k++){
+    for (const i of clusters[k]) pop[i].clade = matched[k].lineageId;
+  }
   state.clades = out;
   return out;
 }
@@ -902,36 +1008,45 @@ function sampleCensus(){
 }
 
 /* ---------- Speciation notifications ----------
-   PEAK-tracking, not raw count: fires only when the viable species count exceeds the
-   highest count ever seen so far this run, not on every sample where it happens to
-   be higher than the immediately preceding one. A clade can wobble across the n>=5
-   viability threshold near a boundary — count 2, then 1, then 2 again — and without
-   peak-tracking that wobble would fire a second "new species" notification for a
-   split that already happened and was already announced.
+   Fires on a recorded SPLIT event from the lineage matcher, which is exact: the
+   matcher knows which group descended from which prior lineage, so it knows which
+   one is genuinely new.
 
-   WHICH clade to name is a heuristic, not a certainty, and is worth being honest
-   about: this model has no persistent lineage identity (that is backlog #2/#18 —
-   clade ids are re-derived by population rank every sample, so "clade 0" can be a
-   different lineage from one sample to the next). The heuristic used here — the
-   smallest of the currently-viable clades is probably the one that just split off,
-   since a freshly diverged lineage has had the least time to grow — is reasonable
-   but not rigorous. Good enough for a toast; not good enough to build a real
-   lineage feature on. */
+   This replaced a heuristic. Before lineage tracking existed, clade ids were assigned
+   by population rank each sample, so there was no way to know which group was new —
+   the notification guessed by naming the SMALLEST viable clade, on the theory that a
+   freshly split lineage has had the least time to grow. Usually right, not always,
+   and it could not distinguish a split from a merge at all.
+
+   Merges are announced too. A lineage rejoining another is as real an event as a
+   split, and staying silent about it would leave a name disappearing from the species
+   list with no explanation. */
 function detectSpeciation(){
-  const n = viableSpeciesCount();
-  if (n > state.peakSpeciesSeen){
-    state.peakSpeciesSeen = n;
-    const viable = (state.clades||[]).filter(c => c.n >= 5).sort((a,b) => a.n - b.n);
-    const newest = viable[0];
-    state.events.push({
-      type: 'speciation',
-      tick: state.tick,
-      name: newest ? cladeName(newest.id) : null,
-      n: newest ? newest.n : null,
-      totalSpecies: n,
-    });
-    if (state.events.length > 20) state.events.shift();   // cap: an unattended long run should not grow this without bound
+  for (const c of (state.clades || [])){
+    if (c.n < 5) continue;                       // ignore unviable noise
+    if (c.event === 'split' || c.event === 'new'){
+      state.events.push({
+        type: 'speciation',
+        tick: state.tick,
+        name: cladeName(c.id),
+        parent: (c.from && c.from.length) ? cladeName(c.from[0]) : null,
+        n: c.n,
+        totalSpecies: viableSpeciesCount(),
+      });
+    } else if (c.event === 'merge'){
+      state.events.push({
+        type: 'merge',
+        tick: state.tick,
+        name: cladeName(c.id),
+        absorbed: (c.from || []).map(cladeName),
+        n: c.n,
+        totalSpecies: viableSpeciesCount(),
+      });
+    }
   }
+  const n = viableSpeciesCount();
+  if (n > state.peakSpeciesSeen) state.peakSpeciesSeen = n;
+  if (state.events.length > 20) state.events.splice(0, state.events.length - 20);
 }
 
 function extinct(){ return state.organisms.length === 0; }

@@ -14,6 +14,8 @@ const VERSION = '0.1.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-07-30', tag:'M8', title:'Lineages that keep their identity',
+    text:'Species now hold onto who they are. Previously a species was re-identified from scratch every few hundred ticks and numbered by size, so whenever two swapped rank they swapped names and colours too. Now identity passes down by descent: Ash stays Ash even when it stops being the biggest. Splits name their true parent — "Brine split from Ash" rather than a guess — and merges are announced instead of a name quietly disappearing, because two species CAN drift back together and start interbreeding again.' },
   { date:'2026-07-30', tag:'M7', title:'Speciation notifications',
     text:'A toast and a brief pulse on the specimen well when a new species emerges, naming it (clade names landed in M6). Fires on genuine peaks in species count, not on every sample where the count happens to be up from the last one — a clade wobbling near the viability threshold cannot trigger a duplicate notification for a split that already happened and was already announced. Non-intrusive by design: never pauses the sim, times by real seconds so it reads the same regardless of speed multiplier, and a Reset clears any notification still on screen from the old run.' },
   { date:'2026-07-30', tag:'M6', title:'Adaptations — armour, venom, nocturnality',

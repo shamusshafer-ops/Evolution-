@@ -3,7 +3,7 @@
 | # | Item | Why | Size | Status |
 |---|---|---|---|---|
 |1| Predation | Gives size a payoff proportional to its cost. Shipped: size 0.67 -> 1.80. Produced bistability (two alternative stable states) rather than the predicted polymorphism | M | **Shipped 2026-07-30** |
-|2| Lineage tracking + phylogeny view | Shows individuals, complements the population-level ribbon | M | Scoped in ROADMAP |
+|2| Lineage tracking | Persistent identity by descent; splits and merges recorded explicitly | M | **Shipped 2026-07-30** |
 |3| Share a run (seed + scenario string) | Determinism makes this nearly free | S | Scoped in ROADMAP |
 |4| Niche partitioning: food types + heritable diet trait | The other half of Gause — proves coexistence, and gives species somewhere to diverge to | M | **Shipped 2026-07-29** |
 |16| Variable resource-type similarity | With types at 0/1 the tradeoff is maximal. A tunable separation would show generalists winning as types converge — the other half of the convex/concave result | S | Backlog |
@@ -11,7 +11,7 @@
 |13| Sexual reproduction + recombination | Prerequisite for speciation — no gene flow to interrupt without it | L | **Shipped 2026-07-30** |
 |14| Emergent speciation via mating distance | Species derived as connected components of the interbreeding graph, not declared | L | **Shipped 2026-07-30** |
 |15| Environmental dynamics: seasons, shocks, migration between patches | Static scenarios cannot show fluctuating selection, a major real driver of maintained diversity | M | **Shipped 2026-07-30** |
-|18| Clade colour/identity stability | Colours are size-ranked so they flicker when ranks swap; needs lineage tracking (#2) to fix properly | S | Backlog |
+|18| Clade colour/identity stability | Fixed by #2 — colour/name key off a lineage id that no longer changes with rank. Zero colour changes measured over a 22k-tick run | S | **Shipped 2026-07-30** |
 |19| Artificial-selection mode | Player becomes the selective pressure; the Darwin-and-pigeon-breeders contrast. Ranked #4 by owner | M | Backlog |
 |7| Trait correlation view (scatter) | Are fast organisms also small? The ribbon cannot show joint distributions | M | Backlog |
 |8| Export run history as CSV | For anyone wanting to analyse outside the tool | S | Backlog |
@@ -29,4 +29,5 @@
 |26| Speciation as an EVENT (toast + flash + auto-name) | Owner-ranked #2 | S | **Shipped 2026-07-30** |
 |27| Fix scenario distinctness | Owner-ranked #3. Temperate/famine/glut land within ~6% of each other on every axis: 9 scenarios, ~3 distinct outcomes | M | Backlog |
 |28| Social/flocking adaptation | The fourth adaptation, deferred from M6 — needs neighbour queries, more expensive than the other three | M | Backlog |
-|29| Name the ACTUAL new clade, not the smallest one | Depends on #2 (lineage tracking). The M7 notification heuristic (smallest = newest) is honest about being approximate; this would make it exact | S | Backlog |
+|29| Name the ACTUAL new clade, not the smallest one | Fixed by #2 — the matcher records which group is genuinely new, so the toast names exact parentage | S | **Shipped 2026-07-30** |
+|30| Phylogeny view | The DATA now exists (#2 shipped: persistent ids, split/merge events with parents). This is the visualisation on top of it — a tree of who descended from whom | M | Backlog |
