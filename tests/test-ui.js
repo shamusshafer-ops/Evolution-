@@ -203,5 +203,55 @@ restart({ seed:'evtB' });
 check('restart clears any toast left over from the previous run', els.toasts.innerHTML === '');
 check('restart resets peakSpeciesSeen for the new run', state.peakSpeciesSeen === 1);
 
+/* --- fullscreen: native path, CSS fallback, and Escape priority --- */
+els.wellWrap = { classList:{ _c:new Set(),
+                 toggle(n,on){ on ? this._c.add(n) : this._c.delete(n); },
+                 contains(n){ return this._c.has(n); } } };
+els.btnFull = { textContent:'', title:'', setAttribute(){}, onclick:null };
+
+/* No native API available -> the CSS fallback must engage. This is the iOS Safari
+   case, where element fullscreen does not exist at all. */
+delete els.wellWrap.requestFullscreen;
+UI.cssFullscreen = false;
+enterFullscreen();
+check('with no native API, the CSS fallback engages', UI.cssFullscreen === true);
+check('the fallback applies the fs class', els.wellWrap.classList.contains('fs'));
+check('isFullscreenActive reports true under the fallback', isFullscreenActive() === true);
+
+exitFullscreen();
+check('exiting clears the fallback flag', UI.cssFullscreen === false);
+check('exiting removes the fs class', !els.wellWrap.classList.contains('fs'));
+check('isFullscreenActive reports false once exited', isFullscreenActive() === false);
+
+/* toggle flips both ways */
+toggleFullscreen();
+check('toggle enters when inactive', isFullscreenActive() === true);
+toggleFullscreen();
+check('toggle exits when active', isFullscreenActive() === false);
+
+/* Escape priority: the About dialog must win Escape while it is open, and only
+   otherwise should Escape leave fullscreen. Getting this backwards would trap a
+   user in fullscreen with the About panel open and no obvious way out. */
+enterFullscreen();
+els.aboutPanel.hidden = false;          // About is open on top of fullscreen
+// simulate the handler's own branch order
+if (!els.aboutPanel.hidden) closeAbout();
+else if (isFullscreenActive()) exitFullscreen();
+check('Escape closes About first when both are open', els.aboutPanel.hidden === true);
+check('...and leaves fullscreen still active', isFullscreenActive() === true);
+
+if (!els.aboutPanel.hidden) closeAbout();
+else if (isFullscreenActive()) exitFullscreen();
+check('a second Escape then exits fullscreen', isFullscreenActive() === false);
+
+/* Native exit driven by the browser (Escape, gesture, tab switch) must resync our
+   own state rather than leaving the button stuck showing "exit". */
+UI.cssFullscreen = true;
+syncFullscreenUI();
+check('sync reflects the fallback state on the button', els.btnFull.textContent === '\u2715');
+UI.cssFullscreen = false;
+syncFullscreenUI();
+check('sync restores the enter-fullscreen glyph', els.btnFull.textContent === '\u26F6');
+
 console.log(`\n${pass}/${pass+fail} checks passed`);
 if(fail) process.exit(1);

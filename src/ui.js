@@ -3,7 +3,7 @@
    are the ones the player asked for (start/pause/reset/scenario/speed).
    ========================================================================== */
 
-const UI = { els:{}, lastPaint:0, autoPaused:false };
+const UI = { els:{}, lastPaint:0, autoPaused:false, cssFullscreen:false };
 
 function $(id){ return document.getElementById(id); }
 
@@ -266,8 +266,102 @@ function bindAbout(){
   if (close) close.onclick = closeAbout;
   if (backdrop) backdrop.onclick = closeAbout;
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape'){ const p = $('aboutPanel'); if (p && !p.hidden) closeAbout(); }
+    if (e.key === 'Escape'){
+      // About wins Escape if it is open; otherwise Escape leaves fullscreen. Native
+      // fullscreen also exits on Escape via the browser itself — harmless, since
+      // exitFullscreen() is idempotent and the change handler resyncs either way.
+      const p = $('aboutPanel');
+      if (p && !p.hidden) closeAbout();
+      else if (isFullscreenActive()) exitFullscreen();
+    }
+    // F toggles fullscreen, matching the convention of basically every media app.
+    if ((e.key === 'f' || e.key === 'F') && e.target.tagName !== 'INPUT'){ toggleFullscreen(); }
   });
+}
+
+/* ---------- Fullscreen ----------
+   Uses the native Fullscreen API where available, and falls back to a CSS class that
+   pins the well over the viewport. Both paths matter: iOS Safari on iPhone does not
+   support requestFullscreen on arbitrary elements at all, so on the platform this is
+   most useful the fallback IS the feature, not a degraded path.
+
+   Two things are easy to get wrong here and both are handled explicitly:
+
+   1. The canvas has a fixed backing-store size set by fitCanvases(). Entering
+      fullscreen changes the CSS box but NOT the backing store, so without an explicit
+      refit the canvas is simply scaled up — a blurry, stretched version of the small
+      render rather than a genuinely larger view. fitCanvases() + drawAll() run on
+      every transition, in both directions.
+
+   2. Escape. Native fullscreen exits on Escape by the browser's own handling and
+      fires fullscreenchange, so the sync handler below catches it. The CSS fallback
+      has no such behaviour and needs the explicit keydown path. The About panel also
+      binds Escape, so ordering is resolved deliberately: if the About dialog is open
+      it takes Escape first (it is the more recently opened, more modal thing), and
+      only otherwise does Escape exit fullscreen. */
+function isFullscreenActive(){
+  return !!(document.fullscreenElement || document.webkitFullscreenElement) ||
+         !!(UI.cssFullscreen);
+}
+
+function syncFullscreenUI(){
+  const wrap = $('wellWrap');
+  const btn = $('btnFull');
+  const native = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  if (wrap) wrap.classList.toggle('fs', !!UI.cssFullscreen);
+  if (btn){
+    const on = native || !!UI.cssFullscreen;
+    btn.textContent = on ? '\u2715' : '\u26F6';
+    btn.title = on ? 'Exit fullscreen (Esc)' : 'Fullscreen';
+    btn.setAttribute('aria-pressed', String(on));
+  }
+  // Refit AFTER the layout change has been applied, or the canvas measures its old
+  // box. rAF is enough here — the class/attribute change is synchronous, the reflow
+  // it triggers is not.
+  requestAnimationFrame(() => { fitCanvases(); drawAll(); });
+}
+
+function enterFullscreen(){
+  const wrap = $('wellWrap');
+  if (!wrap) return;
+  const req = wrap.requestFullscreen || wrap.webkitRequestFullscreen;
+  if (req){
+    try {
+      const r = req.call(wrap);
+      // Older implementations return undefined rather than a promise.
+      if (r && typeof r.catch === 'function'){
+        r.catch(() => { UI.cssFullscreen = true; syncFullscreenUI(); });
+      }
+      syncFullscreenUI();
+      return;
+    } catch(e){ /* fall through to the CSS path */ }
+  }
+  UI.cssFullscreen = true;
+  syncFullscreenUI();
+}
+
+function exitFullscreen(){
+  const ex = document.exitFullscreen || document.webkitExitFullscreen;
+  if ((document.fullscreenElement || document.webkitFullscreenElement) && ex){
+    try { const r = ex.call(document); if (r && typeof r.catch === 'function') r.catch(()=>{}); }
+    catch(e){ /* ignore — the CSS path below still clears our own state */ }
+  }
+  UI.cssFullscreen = false;
+  syncFullscreenUI();
+}
+
+function toggleFullscreen(){
+  if (isFullscreenActive()) exitFullscreen(); else enterFullscreen();
+}
+
+function bindFullscreen(){
+  const btn = $('btnFull');
+  if (btn) btn.onclick = toggleFullscreen;
+  // The browser can exit fullscreen without us (Escape, gesture, tab switch), so the
+  // button state has to follow the DOM rather than our own bookkeeping.
+  for (const ev of ['fullscreenchange','webkitfullscreenchange']){
+    document.addEventListener(ev, () => { UI.cssFullscreen = false; syncFullscreenUI(); });
+  }
 }
 
 function bindUI(){

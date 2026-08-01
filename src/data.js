@@ -14,6 +14,8 @@ const VERSION = '0.1.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-07-30', tag:'ui', title:'Fullscreen',
+    text:'The specimen well pops out to fill the screen — button in its top-right corner, or press F. Escape brings it back. If the About panel happens to be open on top, Escape closes that first and a second press exits fullscreen, so you are never stuck. Uses real browser fullscreen where available and falls back to a full-viewport overlay on iOS, where element fullscreen does not exist.' },
   { date:'2026-07-30', tag:'M9', title:'Creatures you can actually look at',
     text:'Organisms are drawn as the creature their traits describe instead of as coloured dots. Speed stretches the body and grows a tail (drag is why fast things are streamlined in reality too), sense sets eye size, diet sets hue, and each adaptation is visible — armour plating on the back, a venom barb at the tail, eyeshine for nocturnal hunters. A new Specimens panel shows each species side by side at full size, so twenty thousand ticks of drift becomes something you can see rather than four decimal numbers. Nothing about the simulation changed: every visual property is read from a trait that was already driving it.' },
   { date:'2026-07-30', tag:'M8', title:'Lineages that keep their identity',

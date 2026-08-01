@@ -39,6 +39,26 @@
 
   .stage{ flex:1; display:flex; flex-direction:column; gap:10px; min-width:0; min-height:0; }
   #wellWrap{ position:relative; flex:1; display:flex; min-height:220px; }
+  /* CSS fallback for platforms without element fullscreen (notably iOS Safari, where
+     this path is the feature rather than a degraded one). Fixed rather than absolute
+     so it escapes the flex layout entirely. */
+  #wellWrap.fs{
+    position:fixed; inset:0; z-index:60; min-height:0; background:var(--well);
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  #wellWrap.fs #well{ border-radius:0; }
+  /* Native fullscreen puts the wrapper itself in the top layer; it still needs to
+     fill it, since the element keeps its original flex sizing otherwise. */
+  #wellWrap:fullscreen{ background:var(--well); }
+  #wellWrap:-webkit-full-screen{ background:var(--well); }
+  #btnFull{
+    position:absolute; top:8px; right:8px; z-index:2;
+    min-height:0; padding:5px 9px; font-size:13px; line-height:1;
+    background:rgba(16,30,36,0.82); border:1px solid var(--rule); border-radius:2px;
+    color:var(--chalk-dim); cursor:pointer;
+  }
+  #btnFull:hover{ color:var(--chalk); border-color:var(--chalk-dim); }
+  #btnFull:focus-visible{ outline:2px solid var(--sense); outline-offset:2px; }
   #well{ flex:1; width:100%; border:1px solid var(--rule); background:var(--well); display:block; border-radius:2px; }
   /* A brief pulse synced to the toast appearing, drawing the eye back to the well at
      the moment a split actually happened — the toast alone can be read without ever
@@ -217,6 +237,7 @@
     <div id="wellWrap">
       <canvas id="well" aria-label="Specimen well: organisms foraging"></canvas>
       <div id="wellFlash"></div>
+      <button id="btnFull" title="Fullscreen" aria-pressed="false">&#9906;</button>
     </div>
     <canvas id="census" aria-label="Population by species over time"></canvas>
     <canvas id="ribbon" aria-label="Trait drift over generations"></canvas>

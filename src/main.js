@@ -24,6 +24,7 @@ function boot(){
   buildShockButtons();
   bindUI();
   bindAbout();
+  bindFullscreen();
   setRunning(true);
   requestAnimationFrame(frame);
 }

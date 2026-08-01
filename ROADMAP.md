@@ -269,6 +269,26 @@ Owner's direction on scope: BOTH science mode and game mode, sharing one engine.
 scenario-flag pattern (predation, adaptations, dayNight) is the mechanism — game-mode
 features gate behind flags so science-mode results stay reproducible.
 
+## Added — fullscreen (2026-07-30)
+
+Button in the well's top-right corner, or `F`. Escape exits.
+
+Two details that are easy to get wrong and are handled explicitly:
+
+- **The canvas backing store.** Entering fullscreen changes the CSS box but not the
+  canvas's internal size, so without an explicit `fitCanvases()` on every transition
+  the result is the small render stretched and blurry rather than a genuinely larger
+  view. Refit runs in both directions, inside a rAF so it measures the box AFTER the
+  layout change lands.
+- **Escape priority.** The About dialog also binds Escape. If About is open it wins
+  Escape and a second press exits fullscreen — the reverse order would leave a user
+  in fullscreen with a dialog open and no obvious way out.
+
+Native Fullscreen API where available, CSS full-viewport fallback otherwise. The
+fallback is not a degraded path: iOS Safari does not support `requestFullscreen` on
+arbitrary elements at all, so on the platform where a popped-out view is most useful,
+the fallback IS the feature.
+
 ## Standing practice — in-app changelog
 
 Every future change that alters what the sim DOES gets a `CHANGELOG` entry in
