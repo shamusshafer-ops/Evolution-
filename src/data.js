@@ -14,6 +14,8 @@ const VERSION = '0.1.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-08-01', tag:'speciation', title:'Adaptive Radiation combines the pressures',
+    text:'A new scenario composes patch geography, two resources, seasons, day/night, predation, carnivory, and the full adaptation set while leaving every controlled scenario intact. Three additional heritable developments can reduce gene flow: site fidelity keeps carriers near their birth habitat, courtship crests enforce tighter diet-based mate recognition, and a breeding-time shift creates temporal isolation. Species detection now uses the same compatibility rule as actual mating. With the exact combined ecology as control, speciation occurred in 3/5 runs by 20,000 ticks; enabling the developments produced it in 5/5 and cut mean first-split time by more than half.' },
   { date:'2026-08-01', tag:'ecology', title:'A richer evolutionary arms race',
     text:'The new Arms Race scenario adds three visible, binary, heritable adaptations without changing the measured Food Chain run. Claws reduce a prey’s chance to escape but cost upkeep. Camouflage shrinks predator detection range but slows movement. Pack hunters can combine the effective size of nearby cooperating predators, but the gene costs upkeep and gives a lone carrier nothing. Each first appearance is announced.' },
   { date:'2026-08-01', tag:'ui', title:'The specimen well is navigable',
@@ -400,6 +402,35 @@ const ADAPTATIONS = [
     emergence:'can cooperate with nearby pack hunters.',
     blurb:'Nearby carnivore carriers combine enough force to tackle larger prey. A lone carrier still pays coordination upkeep and gains nothing.'
   },
+  {
+    key:'philopatry', name:'Site fidelity', short:'SITE', color:'#5FC7C9', glyph:'⌂',
+    enabledBy:'radiationAdaptations', notify:true, mutateChance:0.018,
+    /* Staying home preserves local adaptation and raises the chance of meeting a
+       similarly adapted mate. The cost is opportunity: resources across the central
+       gap become inaccessible even during a poor local season. */
+    costCoef:0, costExp:0,
+    emergence:'now remains close to its birth habitat.',
+    blurb:'Keeps carriers on their birth side of a divided habitat, reducing gene flow. The cost is losing access to resources on the other side.'
+  },
+  {
+    key:'courtship', name:'Courtship crest', short:'CRST', color:'#E56AA6', glyph:'♢',
+    enabledBy:'radiationAdaptations', notify:true, mutateChance:0.018,
+    /* A magic-trait analogue: the visible signal is used to recognise mates from a
+       similar feeding niche. It can preserve co-adapted gene combinations, but the
+       display costs upkeep and choosy carriers can fail to find a mate. */
+    costCoef:0.010, costExp:0, dietTolerance:0.08,
+    emergence:'now chooses mates from a more similar feeding niche.',
+    blurb:'A visible mating signal that restricts carriers to partners with closely matching diets. Costs upkeep and makes suitable mates harder to find.'
+  },
+  {
+    key:'latebreeder', name:'Late breeding', short:'LATE', color:'#A88BE8', glyph:'◒',
+    enabledBy:'radiationAdaptations', notify:true, mutateChance:0.018,
+    /* Temporal isolation has no metabolic fee. Its cost is direct: only half of the
+       seasonal cycle is available for breeding, and the opposite phase cannot mate. */
+    costCoef:0, costExp:0,
+    emergence:'now breeds in the later seasonal window.',
+    blurb:'Moves reproduction into the later half of the seasonal cycle. Early and late breeders no longer exchange genes; each loses half the breeding year.'
+  },
 ];
 const ADAPT_KEYS = ADAPTATIONS.map(a => a.key);
 const ADAPT_BY_KEY = {};
@@ -596,6 +627,14 @@ const SCENARIOS = [
   { id:'armsrace', name:'Arms Race', blurb:'Food Chain plus claws, camouflage, and cooperative pack hunting. Every advantage carries a cost, and each new adaptation announces itself.',
     patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34,
       predation:true, adaptations:true, carnivory:true, advancedAdaptations:true,
+      predationReachMul:5.0, predationSizeRatio:1.10, predationMinPreySize:0.35 } },
+
+  /* A composition, not a replacement for the controlled scenarios above. This is
+     where pressures interact; the individual scenarios remain the causal controls. */
+  { id:'radiation', name:'Adaptive Radiation', blurb:'A divided, seasonal food web where habitat fidelity, courtship signals, and breeding time can independently reduce gene flow and create species.',
+    patch:{ foodPerTick:4.2, foodEnergy:58, foodMax:900, clumped:true, siteCount:40, clumpRadius:30,
+      wrap:false, twoPatches:true, seasonal:true, predation:true, adaptations:true,
+      dayNight:true, carnivory:true, advancedAdaptations:true, radiationAdaptations:true,
       predationReachMul:5.0, predationSizeRatio:1.10, predationMinPreySize:0.35 } },
 
   /* The Baldwin experiment needs frequent, survivable experience rather than M5's

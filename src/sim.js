@@ -180,6 +180,7 @@ function makeOrganism(x, y, traits, gen, adapt){
     learned: 0,          // within-lifetime escape skill; NOT inherited (that is the point)
     escapes: 0,          // near-misses survived, for inspection
     ad: {},              // discrete adaptation genes; see ADAPTATIONS in data.js
+    homePatch: x < state.cfg.w/2 ? 0 : 1, // birthplace side; used only by site fidelity
     x, y,
     dir: rnd() * Math.PI * 2,
     gen: gen || 1,
@@ -398,6 +399,38 @@ function traitDistance(a, b){
   return Math.sqrt(acc / SPECIATION_TRAITS.length);
 }
 
+/* Potential reproductive compatibility is one shared fact. matingPass() uses it to
+   decide who actually breeds; computeSpecies() uses the same function to construct
+   the interbreeding graph. Keeping both on this path is essential once isolation can
+   be ecological, behavioural, or temporal rather than trait-distance alone. */
+function reproductivelyCompatible(a,b){
+  if (traitDistance(a,b) > MATE.maxTraitDistance) return false;
+  if (!state.cfg.radiationAdaptations) return true;
+  // Opposite breeding windows never overlap, creating temporal isolation.
+  if (!!(a.ad&&a.ad.latebreeder) !== !!(b.ad&&b.ad.latebreeder)) return false;
+  // A crest on either chooser demands a close diet match. This lets the signal
+  // preserve feeding-niche combinations without making crest presence itself a
+  // magical species label.
+  if ((a.ad&&a.ad.courtship)||(b.ad&&b.ad.courtship)){
+    if (Math.abs(a.diet-b.diet) > ADAPT_BY_KEY.courtship.dietTolerance) return false;
+  }
+  return true;
+}
+
+function breedingWindowOpen(o){
+  if (!state.cfg.radiationAdaptations) return true;
+  const late=(state.tick%SEASON.period) >= SEASON.period/2;
+  return !!(o.ad&&o.ad.latebreeder) === late;
+}
+
+function applyHabitatFidelity(o){
+  if (!state.cfg.radiationAdaptations || !state.cfg.twoPatches || !o.ad || !o.ad.philopatry) return;
+  const gapLo=state.cfg.w*(0.5-PATCH.gapFrac/2);
+  const gapHi=state.cfg.w*(0.5+PATCH.gapFrac/2);
+  if (o.homePatch===0 && o.x>gapLo){ o.x=gapLo; o.dir=Math.PI-o.dir; }
+  if (o.homePatch===1 && o.x<gapHi){ o.x=gapHi; o.dir=Math.PI-o.dir; }
+}
+
 function reproduceSexual(a, b){
   const childTraits = {};
   for (const t of TRAITS){
@@ -414,7 +447,7 @@ function reproduceSexual(a, b){
       if (def.enabledBy && !state.cfg[def.enabledBy]) continue;
       const k = def.key;
       let v = (rnd() < 0.5) ? !!a.ad[k] : !!b.ad[k];
-      if (rnd() < ADAPT_MUTATE) v = !v;
+      if (rnd() < (def.mutateChance == null ? ADAPT_MUTATE : def.mutateChance)) v = !v;
       childAdapt[k] = v;
     }
   }
@@ -533,6 +566,7 @@ function step(){
       if (o.x < 0 || o.x > cfg.w){ o.dir = Math.PI - o.dir; o.x = clamp(o.x, 0, cfg.w); }
       if (o.y < 0 || o.y > cfg.h){ o.dir = -o.dir;          o.y = clamp(o.y, 0, cfg.h); }
     }
+    applyHabitatFidelity(o);
 
     /* --- eat --- */
     if (o.target != null && !eatenFood.has(o.target)){
@@ -832,7 +866,7 @@ function matingPass(){
   const cfg = state.cfg;
   const ready = [];
   for (const o of state.organisms){
-    if (o.energy >= LIFE.reproduceAt && o.age >= MATE.maturity) ready.push(o);
+    if (o.energy >= LIFE.reproduceAt && o.age >= MATE.maturity && breedingWindowOpen(o)) ready.push(o);
   }
   if (ready.length < 2) return;
 
@@ -871,9 +905,9 @@ function matingPass(){
           const dx = wrapDelta(b.x - a.x, cfg.w), dy = wrapDelta(b.y - a.y, cfg.h);
           const d2 = dx*dx + dy*dy;
           if (d2 > r2) continue;
-          // Assortative mating: too far apart in trait space and they cannot breed.
-          // This single line is what lets species arise instead of being declared.
-          if (traitDistance(a, b) > MATE.maxTraitDistance) continue;
+          // Ecological, behavioural, and temporal barriers share this exact check
+          // with the species graph below; incompatible pairs cannot breed.
+          if (!reproductivelyCompatible(a,b)) continue;
           if (d2 < bestD){ bestD = d2; mate = j; }
         }
       }
@@ -923,7 +957,8 @@ function matingPass(){
    changes.
 
    The hard case, and the reason this needed care rather than just a parentId field:
-   MATE.maxTraitDistance is a threshold, not a wall. Two lineages that diverged can
+   Reproductive compatibility is a thresholded graph, not necessarily a permanent
+   wall. Two lineages that diverged can
    drift back within range and resume interbreeding — a real phenomenon, and if the
    matcher ignored it, one lineage's members would be silently reassigned to the
    other's id and the recorded ancestry would be quietly wrong with nothing to flag
@@ -1011,11 +1046,12 @@ function computeSpecies(){
   function union(i, j){ const a = find(i), b = find(j); if (a !== b) parent[a] = b; }
 
   const thr = MATE.maxTraitDistance;
-  if (isFinite(thr)){
+  const hasOtherBarriers = !!state.cfg.radiationAdaptations;
+  if (isFinite(thr) || hasOtherBarriers){
     for (let i = 0; i < n; i++){
       for (let j = i+1; j < n; j++){
         if (find(i) === find(j)) continue;
-        if (traitDistance(pop[i], pop[j]) <= thr) union(i, j);
+        if (reproductivelyCompatible(pop[i], pop[j])) union(i, j);
       }
     }
   }
@@ -1023,7 +1059,7 @@ function computeSpecies(){
 
   const groups = new Map();
   for (let i = 0; i < n; i++){
-    const r = isFinite(thr) ? find(i) : 0;
+    const r = (isFinite(thr) || hasOtherBarriers) ? find(i) : 0;
     let g = groups.get(r); if (!g){ g = []; groups.set(r, g); }
     g.push(i);
   }

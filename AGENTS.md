@@ -25,13 +25,13 @@ node --check build/evo.js  # syntax check on the bundle
 cat tests/harness.js build/evo.js tests/test-NAME.js | node
 ```
 
-There is no `npm test` — the suite is 13 files, run one at a time. `tests/harness.js`
+There is no `npm test` — the suite is 14 files, run one at a time. `tests/harness.js`
 provides the browser-free globals (`document`, `window`, etc.) that let `sim.js` run
-headless. Current files (343 checks total as of this handoff): `test-core.js`,
+headless. Current files (372 checks total as of this handoff): `test-core.js`,
 `test-niche.js`, `test-render.js`, `test-selection.js`, `test-speciation.js`,
 `test-ui.js`, `test-environment.js`, `test-predation.js`, `test-adaptations.js`,
 `test-lineage.js`, `test-learning.js`, `test-carnivory.js`, and
-`test-advanced-adaptations.js`. (`test-species.js` existed briefly in M2/M3
+`test-advanced-adaptations.js`, and `test-radiation.js`. (`test-species.js` existed briefly in M2/M3
 and was deleted when hardcoded species were replaced by emergent ones — if you see
 it referenced in old commit messages, that's why it's gone.)
 
@@ -45,7 +45,7 @@ loop with a short one.
 ## The rule that matters most: scenario-flag gating
 
 `cfg.predation`, `cfg.adaptations`, `cfg.dayNight`, `cfg.learning`, `cfg.carnivory`,
-`cfg.advancedAdaptations`. Every mechanic
+`cfg.advancedAdaptations`, `cfg.radiationAdaptations`. Every mechanic
 built after M4 lives behind one of these. **Never make a new mechanic apply
 unconditionally.** The reason: this repo's credibility rests on measured, reproduced
 findings (Gause's exclusion, Kleiber scaling, the M5 bistability, negative
@@ -126,6 +126,12 @@ touching a threshold, and say so in the commit message the way past commits have
   size. The extra flag preserves Food Chain’s RNG stream. Three exploratory 30k runs
   retained viable populations and all three genes; do not strengthen that into a
   fixation or equilibrium claim without a controlled comparison.
+- **Adaptive Radiation is shipped.** It composes existing pressures and adds site
+  fidelity, diet-linked courtship, and a breeding-time shift. Both mating and species
+  derivation call `reproductivelyCompatible()`; never add an isolation rule to only
+  one path. A paired five-seed/20k comparison measured 3/5 control speciation versus
+  5/5 with developments, and mean first split fell from 16.3k to 2.7k. This supports
+  faster radiation, not equal causal credit for all three genes.
 
 **Next product decision:** owner-ranked #32 (eras / genuine unlock thresholds) is the
 next large game-mode slice. Follow-a-lineage (#33) and timeline compression (#34) are
@@ -141,6 +147,6 @@ sufficient) rather than assuming `git` is configured. Do not commit a token to a
 file in this repo, ever, including this one.
 
 Before pushing: `node build.js && node build.js --check`, run the full test suite
-(budget ~15-20 minutes for all 13 files individually), then push `src/`, `build/`,
+(budget ~15-20 minutes for all 14 files individually), then push `src/`, `build/`,
 `index.html`, `tests/`, and the three doc files together in one commit so the
 generated artifacts never drift from `src/` in the remote history.

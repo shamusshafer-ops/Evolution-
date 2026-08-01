@@ -114,6 +114,9 @@ function cladeColor(k){ return CLADE_COLORS[k % CLADE_COLORS.length]; }
      claws     -> hooked forelimbs
      camouflage -> mottled flank patches
      pack      -> three dorsal group marks
+     philopatry -> paired habitat fins
+     courtship -> bright dorsal crest
+     latebreeder -> seasonal body band
 
    Drawn in local space (origin at the organism, +x along heading) and transformed by
    the caller, so the same routine serves the tiny well markers and the large specimen
@@ -205,6 +208,32 @@ function drawCreature(ctx, o, R, opts){
       for (const x of [-0.28,0,0.28]){
         ctx.beginPath(); ctx.arc(bodyL*x,-bodyW*0.58,Math.max(0.45,R*0.10),0,Math.PI*2); ctx.fill();
       }
+    }
+    // site fidelity — paired fins, a stable habitat-oriented morphology
+    if (o.ad && o.ad.philopatry){
+      ctx.fillStyle=ADAPT_BY_KEY.philopatry.color;
+      for(const sy of [-1,1]){
+        ctx.beginPath();
+        ctx.moveTo(-bodyL*0.15,sy*bodyW*0.72);
+        ctx.lineTo(-bodyL*0.48,sy*bodyW*1.20);
+        ctx.lineTo(bodyL*0.10,sy*bodyW*0.78);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    // courtship crest — conspicuous and costly by design
+    if (o.ad && o.ad.courtship){
+      ctx.fillStyle=ADAPT_BY_KEY.courtship.color;
+      ctx.beginPath();
+      ctx.moveTo(bodyL*0.05,-bodyW*0.82);
+      ctx.lineTo(bodyL*0.28,-bodyW*1.48);
+      ctx.lineTo(bodyL*0.50,-bodyW*0.72);
+      ctx.closePath(); ctx.fill();
+    }
+    // late breeding — a half-cycle band across the body
+    if (o.ad && o.ad.latebreeder){
+      ctx.strokeStyle=ADAPT_BY_KEY.latebreeder.color;
+      ctx.lineWidth=Math.max(0.6,R*0.14);
+      ctx.beginPath(); ctx.moveTo(-bodyL*0.10,-bodyW*0.90); ctx.lineTo(-bodyL*0.10,bodyW*0.90); ctx.stroke();
     }
     // eyes — forward-set, scaled by sense
     const eyeR = Math.max(0.5, R * (0.16 + tSense * 0.52));

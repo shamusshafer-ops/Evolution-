@@ -15,6 +15,8 @@ const VERSION = '0.1.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-08-01', tag:'speciation', title:'Adaptive Radiation combines the pressures',
+    text:'A new scenario composes patch geography, two resources, seasons, day/night, predation, carnivory, and the full adaptation set while leaving every controlled scenario intact. Three additional heritable developments can reduce gene flow: site fidelity keeps carriers near their birth habitat, courtship crests enforce tighter diet-based mate recognition, and a breeding-time shift creates temporal isolation. Species detection now uses the same compatibility rule as actual mating. With the exact combined ecology as control, speciation occurred in 3/5 runs by 20,000 ticks; enabling the developments produced it in 5/5 and cut mean first-split time by more than half.' },
   { date:'2026-08-01', tag:'ecology', title:'A richer evolutionary arms race',
     text:'The new Arms Race scenario adds three visible, binary, heritable adaptations without changing the measured Food Chain run. Claws reduce a prey’s chance to escape but cost upkeep. Camouflage shrinks predator detection range but slows movement. Pack hunters can combine the effective size of nearby cooperating predators, but the gene costs upkeep and gives a lone carrier nothing. Each first appearance is announced.' },
   { date:'2026-08-01', tag:'ui', title:'The specimen well is navigable',
@@ -401,6 +403,35 @@ const ADAPTATIONS = [
     emergence:'can cooperate with nearby pack hunters.',
     blurb:'Nearby carnivore carriers combine enough force to tackle larger prey. A lone carrier still pays coordination upkeep and gains nothing.'
   },
+  {
+    key:'philopatry', name:'Site fidelity', short:'SITE', color:'#5FC7C9', glyph:'⌂',
+    enabledBy:'radiationAdaptations', notify:true, mutateChance:0.018,
+    /* Staying home preserves local adaptation and raises the chance of meeting a
+       similarly adapted mate. The cost is opportunity: resources across the central
+       gap become inaccessible even during a poor local season. */
+    costCoef:0, costExp:0,
+    emergence:'now remains close to its birth habitat.',
+    blurb:'Keeps carriers on their birth side of a divided habitat, reducing gene flow. The cost is losing access to resources on the other side.'
+  },
+  {
+    key:'courtship', name:'Courtship crest', short:'CRST', color:'#E56AA6', glyph:'♢',
+    enabledBy:'radiationAdaptations', notify:true, mutateChance:0.018,
+    /* A magic-trait analogue: the visible signal is used to recognise mates from a
+       similar feeding niche. It can preserve co-adapted gene combinations, but the
+       display costs upkeep and choosy carriers can fail to find a mate. */
+    costCoef:0.010, costExp:0, dietTolerance:0.08,
+    emergence:'now chooses mates from a more similar feeding niche.',
+    blurb:'A visible mating signal that restricts carriers to partners with closely matching diets. Costs upkeep and makes suitable mates harder to find.'
+  },
+  {
+    key:'latebreeder', name:'Late breeding', short:'LATE', color:'#A88BE8', glyph:'◒',
+    enabledBy:'radiationAdaptations', notify:true, mutateChance:0.018,
+    /* Temporal isolation has no metabolic fee. Its cost is direct: only half of the
+       seasonal cycle is available for breeding, and the opposite phase cannot mate. */
+    costCoef:0, costExp:0,
+    emergence:'now breeds in the later seasonal window.',
+    blurb:'Moves reproduction into the later half of the seasonal cycle. Early and late breeders no longer exchange genes; each loses half the breeding year.'
+  },
 ];
 const ADAPT_KEYS = ADAPTATIONS.map(a => a.key);
 const ADAPT_BY_KEY = {};
@@ -597,6 +628,14 @@ const SCENARIOS = [
   { id:'armsrace', name:'Arms Race', blurb:'Food Chain plus claws, camouflage, and cooperative pack hunting. Every advantage carries a cost, and each new adaptation announces itself.',
     patch:{ foodPerTick:3.0, foodEnergy:55, foodMax:700, clumped:true, siteCount:40, clumpRadius:34,
       predation:true, adaptations:true, carnivory:true, advancedAdaptations:true,
+      predationReachMul:5.0, predationSizeRatio:1.10, predationMinPreySize:0.35 } },
+
+  /* A composition, not a replacement for the controlled scenarios above. This is
+     where pressures interact; the individual scenarios remain the causal controls. */
+  { id:'radiation', name:'Adaptive Radiation', blurb:'A divided, seasonal food web where habitat fidelity, courtship signals, and breeding time can independently reduce gene flow and create species.',
+    patch:{ foodPerTick:4.2, foodEnergy:58, foodMax:900, clumped:true, siteCount:40, clumpRadius:30,
+      wrap:false, twoPatches:true, seasonal:true, predation:true, adaptations:true,
+      dayNight:true, carnivory:true, advancedAdaptations:true, radiationAdaptations:true,
       predationReachMul:5.0, predationSizeRatio:1.10, predationMinPreySize:0.35 } },
 
   /* The Baldwin experiment needs frequent, survivable experience rather than M5's
@@ -813,6 +852,7 @@ function makeOrganism(x, y, traits, gen, adapt){
     learned: 0,          // within-lifetime escape skill; NOT inherited (that is the point)
     escapes: 0,          // near-misses survived, for inspection
     ad: {},              // discrete adaptation genes; see ADAPTATIONS in data.js
+    homePatch: x < state.cfg.w/2 ? 0 : 1, // birthplace side; used only by site fidelity
     x, y,
     dir: rnd() * Math.PI * 2,
     gen: gen || 1,
@@ -1031,6 +1071,38 @@ function traitDistance(a, b){
   return Math.sqrt(acc / SPECIATION_TRAITS.length);
 }
 
+/* Potential reproductive compatibility is one shared fact. matingPass() uses it to
+   decide who actually breeds; computeSpecies() uses the same function to construct
+   the interbreeding graph. Keeping both on this path is essential once isolation can
+   be ecological, behavioural, or temporal rather than trait-distance alone. */
+function reproductivelyCompatible(a,b){
+  if (traitDistance(a,b) > MATE.maxTraitDistance) return false;
+  if (!state.cfg.radiationAdaptations) return true;
+  // Opposite breeding windows never overlap, creating temporal isolation.
+  if (!!(a.ad&&a.ad.latebreeder) !== !!(b.ad&&b.ad.latebreeder)) return false;
+  // A crest on either chooser demands a close diet match. This lets the signal
+  // preserve feeding-niche combinations without making crest presence itself a
+  // magical species label.
+  if ((a.ad&&a.ad.courtship)||(b.ad&&b.ad.courtship)){
+    if (Math.abs(a.diet-b.diet) > ADAPT_BY_KEY.courtship.dietTolerance) return false;
+  }
+  return true;
+}
+
+function breedingWindowOpen(o){
+  if (!state.cfg.radiationAdaptations) return true;
+  const late=(state.tick%SEASON.period) >= SEASON.period/2;
+  return !!(o.ad&&o.ad.latebreeder) === late;
+}
+
+function applyHabitatFidelity(o){
+  if (!state.cfg.radiationAdaptations || !state.cfg.twoPatches || !o.ad || !o.ad.philopatry) return;
+  const gapLo=state.cfg.w*(0.5-PATCH.gapFrac/2);
+  const gapHi=state.cfg.w*(0.5+PATCH.gapFrac/2);
+  if (o.homePatch===0 && o.x>gapLo){ o.x=gapLo; o.dir=Math.PI-o.dir; }
+  if (o.homePatch===1 && o.x<gapHi){ o.x=gapHi; o.dir=Math.PI-o.dir; }
+}
+
 function reproduceSexual(a, b){
   const childTraits = {};
   for (const t of TRAITS){
@@ -1047,7 +1119,7 @@ function reproduceSexual(a, b){
       if (def.enabledBy && !state.cfg[def.enabledBy]) continue;
       const k = def.key;
       let v = (rnd() < 0.5) ? !!a.ad[k] : !!b.ad[k];
-      if (rnd() < ADAPT_MUTATE) v = !v;
+      if (rnd() < (def.mutateChance == null ? ADAPT_MUTATE : def.mutateChance)) v = !v;
       childAdapt[k] = v;
     }
   }
@@ -1166,6 +1238,7 @@ function step(){
       if (o.x < 0 || o.x > cfg.w){ o.dir = Math.PI - o.dir; o.x = clamp(o.x, 0, cfg.w); }
       if (o.y < 0 || o.y > cfg.h){ o.dir = -o.dir;          o.y = clamp(o.y, 0, cfg.h); }
     }
+    applyHabitatFidelity(o);
 
     /* --- eat --- */
     if (o.target != null && !eatenFood.has(o.target)){
@@ -1465,7 +1538,7 @@ function matingPass(){
   const cfg = state.cfg;
   const ready = [];
   for (const o of state.organisms){
-    if (o.energy >= LIFE.reproduceAt && o.age >= MATE.maturity) ready.push(o);
+    if (o.energy >= LIFE.reproduceAt && o.age >= MATE.maturity && breedingWindowOpen(o)) ready.push(o);
   }
   if (ready.length < 2) return;
 
@@ -1504,9 +1577,9 @@ function matingPass(){
           const dx = wrapDelta(b.x - a.x, cfg.w), dy = wrapDelta(b.y - a.y, cfg.h);
           const d2 = dx*dx + dy*dy;
           if (d2 > r2) continue;
-          // Assortative mating: too far apart in trait space and they cannot breed.
-          // This single line is what lets species arise instead of being declared.
-          if (traitDistance(a, b) > MATE.maxTraitDistance) continue;
+          // Ecological, behavioural, and temporal barriers share this exact check
+          // with the species graph below; incompatible pairs cannot breed.
+          if (!reproductivelyCompatible(a,b)) continue;
           if (d2 < bestD){ bestD = d2; mate = j; }
         }
       }
@@ -1556,7 +1629,8 @@ function matingPass(){
    changes.
 
    The hard case, and the reason this needed care rather than just a parentId field:
-   MATE.maxTraitDistance is a threshold, not a wall. Two lineages that diverged can
+   Reproductive compatibility is a thresholded graph, not necessarily a permanent
+   wall. Two lineages that diverged can
    drift back within range and resume interbreeding — a real phenomenon, and if the
    matcher ignored it, one lineage's members would be silently reassigned to the
    other's id and the recorded ancestry would be quietly wrong with nothing to flag
@@ -1644,11 +1718,12 @@ function computeSpecies(){
   function union(i, j){ const a = find(i), b = find(j); if (a !== b) parent[a] = b; }
 
   const thr = MATE.maxTraitDistance;
-  if (isFinite(thr)){
+  const hasOtherBarriers = !!state.cfg.radiationAdaptations;
+  if (isFinite(thr) || hasOtherBarriers){
     for (let i = 0; i < n; i++){
       for (let j = i+1; j < n; j++){
         if (find(i) === find(j)) continue;
-        if (traitDistance(pop[i], pop[j]) <= thr) union(i, j);
+        if (reproductivelyCompatible(pop[i], pop[j])) union(i, j);
       }
     }
   }
@@ -1656,7 +1731,7 @@ function computeSpecies(){
 
   const groups = new Map();
   for (let i = 0; i < n; i++){
-    const r = isFinite(thr) ? find(i) : 0;
+    const r = (isFinite(thr) || hasOtherBarriers) ? find(i) : 0;
     let g = groups.get(r); if (!g){ g = []; groups.set(r, g); }
     g.push(i);
   }
@@ -1961,6 +2036,9 @@ function cladeColor(k){ return CLADE_COLORS[k % CLADE_COLORS.length]; }
      claws     -> hooked forelimbs
      camouflage -> mottled flank patches
      pack      -> three dorsal group marks
+     philopatry -> paired habitat fins
+     courtship -> bright dorsal crest
+     latebreeder -> seasonal body band
 
    Drawn in local space (origin at the organism, +x along heading) and transformed by
    the caller, so the same routine serves the tiny well markers and the large specimen
@@ -2052,6 +2130,32 @@ function drawCreature(ctx, o, R, opts){
       for (const x of [-0.28,0,0.28]){
         ctx.beginPath(); ctx.arc(bodyL*x,-bodyW*0.58,Math.max(0.45,R*0.10),0,Math.PI*2); ctx.fill();
       }
+    }
+    // site fidelity — paired fins, a stable habitat-oriented morphology
+    if (o.ad && o.ad.philopatry){
+      ctx.fillStyle=ADAPT_BY_KEY.philopatry.color;
+      for(const sy of [-1,1]){
+        ctx.beginPath();
+        ctx.moveTo(-bodyL*0.15,sy*bodyW*0.72);
+        ctx.lineTo(-bodyL*0.48,sy*bodyW*1.20);
+        ctx.lineTo(bodyL*0.10,sy*bodyW*0.78);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    // courtship crest — conspicuous and costly by design
+    if (o.ad && o.ad.courtship){
+      ctx.fillStyle=ADAPT_BY_KEY.courtship.color;
+      ctx.beginPath();
+      ctx.moveTo(bodyL*0.05,-bodyW*0.82);
+      ctx.lineTo(bodyL*0.28,-bodyW*1.48);
+      ctx.lineTo(bodyL*0.50,-bodyW*0.72);
+      ctx.closePath(); ctx.fill();
+    }
+    // late breeding — a half-cycle band across the body
+    if (o.ad && o.ad.latebreeder){
+      ctx.strokeStyle=ADAPT_BY_KEY.latebreeder.color;
+      ctx.lineWidth=Math.max(0.6,R*0.14);
+      ctx.beginPath(); ctx.moveTo(-bodyL*0.10,-bodyW*0.90); ctx.lineTo(-bodyL*0.10,bodyW*0.90); ctx.stroke();
     }
     // eyes — forward-set, scaled by sense
     const eyeR = Math.max(0.5, R * (0.16 + tSense * 0.52));

@@ -400,6 +400,42 @@ Arms Race runs, all populations survived (323–487 organisms), produced 359–5
 and all three new genes were still present; this is a viability check, not a claim
 that any one strategy must fix.
 
+## Added — Adaptive Radiation / evolving isolation (2026-08-01)
+
+The controlled scenarios remain the causal experiments; Adaptive Radiation is their
+composition layer. It combines the Archipelago’s divided geography, Oasis resource
+specialization, seasonal food, day/night niches, predation, carnivory, and both prior
+adaptation sets. This distinction matters: a combined mode is useful for emergence,
+but it cannot replace the isolated scenarios when attributing a result to one pressure.
+
+Three new binary developments target different routes to reproductive isolation:
+
+- **Site fidelity (`⌂`)** confines carriers to their birth patch. It reinforces
+  allopatric divergence and pays through foregone access to the other patch.
+- **Courtship crest (`♢`)** requires a diet match within 0.08 whenever either chooser
+  carries it. Display upkeep and mate scarcity pay for preserving local ecological
+  combinations—a simple magic-trait analogue.
+- **Late breeding (`◒`)** moves mating to the second half of the seasonal cycle while
+  non-carriers breed in the first. The two phases never exchange genes and both lose
+  half the breeding year.
+
+`reproductivelyCompatible()` is now the shared contract for `matingPass()` and
+`computeSpecies()`. This is load-bearing: a temporal or behavioural barrier must alter
+actual mating and the derived interbreeding graph identically, or “speciation” would
+only be a UI label.
+
+Measured across five deterministic 20,000-tick pairs:
+
+| Combined ecology | Runs with speciation | First split ticks |
+|---|---:|---|
+| Developments disabled | 3/5 | 11,000; 13,000; 16,500; two absent |
+| Developments enabled | **5/5** | 3,000; 1,500; 2,500; 5,500; 1,000 |
+
+Every enabled run remained viable. Mean first-split time (counting absent control
+splits conservatively at 20,500) fell from 16,300 to 2,700 ticks. This establishes an
+acceleration of speciation in this model; it does not claim every individual barrier
+contributed equally without a future factorial experiment.
+
 **Also fixed while building this, and must not regress:** `traitDistance()` divides
 by trait count, so adding wariness/plasticity to the set speciation measures over
 would have silently shrunk every distance a given divergence produces and

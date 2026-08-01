@@ -131,7 +131,7 @@ if (typeof require !== 'undefined'){
     check('the Specimens panel contains a visible legend for hue, size, speed, sense, and adaptation marks',
           /class="specimenLegend"/.test(html) && /Body hue/.test(html) && /Body width/.test(html) &&
           /Long body \+ tail/.test(html) && /Large eyes/.test(html) && /armour, venom, nocturnal, carnivore/.test(html) &&
-          /claws, camouflage, pack hunting/.test(html));
+          /claws, camouflage, pack hunting/.test(html) && /site fidelity, courtship crest, late breeding/.test(html));
     check('species adaptation icons expose a hover/focus explanation',
           /\.adGlyph:hover::after/.test(html) && /\.adGlyph:focus-visible::after/.test(html));
     check('the well exposes pause, zoom, reset, fullscreen, and pointer navigation in both layouts',

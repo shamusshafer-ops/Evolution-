@@ -119,6 +119,23 @@ pack hunters combine their effective size when cooperating nearby. All three hav
 distinct specimen morphology, species glyphs with explanations, and first-emergence
 notifications. They are isolated from Food Chain so its measured result stays intact.
 
+## Adaptive radiation
+
+The **Adaptive Radiation** scenario is the deliberate combination mode: divided
+habitat, two resources, seasons, day/night, predation, carnivory, and every earlier
+adaptation interact in one food web. Three developments act specifically on gene flow:
+
+- **Site fidelity** keeps carriers on their birth side, strengthening geographic isolation.
+- **Courtship crests** restrict carriers to mates with closely matching diets, coupling
+  sexual selection to ecological specialization.
+- **Late breeding** shifts reproduction into the opposite seasonal half, creating
+  temporal isolation from early breeders.
+
+These are not labels applied after the fact. Actual mating and species detection use
+the same compatibility function. In five deterministic 20,000-tick comparisons, the
+combined ecology alone speciated 3/5 times; enabling these developments produced
+speciation in 5/5 and reduced mean first-split time by more than half.
+
 ## Determinism
 
 Every random draw goes through a seeded PRNG. Nothing calls `Math.random`. The same seed

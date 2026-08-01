@@ -89,7 +89,8 @@ check('drawCreature does not throw at trait extremes', (() => {
   try {
     for (const tr of [[0.2,0.35,4,0],[6,3.2,150,1],[1,1,30,0.5]]){
       const o = makeOrganism(0,0,{speed:tr[0],size:tr[1],sense:tr[2],diet:tr[3]},1,
-        {armor:true,venom:true,nocturnal:true,carnivore:true,claws:true,camouflage:true,pack:true});
+        {armor:true,venom:true,nocturnal:true,carnivore:true,claws:true,camouflage:true,pack:true,
+         philopatry:true,courtship:true,latebreeder:true});
       drawCreature(c, o, 8, {detail:true});
       drawCreature(c, o, 1, {detail:false});
     }
