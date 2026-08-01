@@ -23,7 +23,7 @@
 |20| Season UI indicator (current phase readout) | Deferred from M4 for time; mechanism works, just no visible readout of where in the cycle a run is | S | Backlog |
 |21| Proper per-field shock stacking | Currently overlapping patch-shocks are refused rather than composed; would need per-field ownership tracking to do correctly | M | Backlog |
 |22| Investigate the seasonal boom-bust lag cycle further | Found unexpectedly during M4 -- reproductive lag causing population overshoot-crash from smooth periodic forcing alone. Worth deliberately tuning/studying rather than leaving as an observed side-effect | M | Backlog |
-|23| Contest competition (the other half of #1) | Share contested food by size^2 instead of first-come. Cheaper than predation and a different mechanism for the same trait; worth comparing against predation's bistable outcome | S | Backlog |
+|23| Contest competition | Share contested food by size^2 instead of first-come. A comparison point for predation's bistability outcome, not a fallback — predation already shipped and worked | S | Backlog |
 |24| Hysteresis test for the predation bistability | If a population in the large-bodied state is pushed small by a shock, does it stay small? True hysteresis would be a strong, teachable result | S | Backlog |
 |25| Discrete adaptations (armour, venom, nocturnal) | Legible evolutionary stories; conditional benefits | M | **Shipped 2026-07-30** |
 |26| Speciation as an EVENT (toast + flash + auto-name) | Owner-ranked #2 | S | **Shipped 2026-07-30** |

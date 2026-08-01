@@ -344,47 +344,22 @@ Alternatives: colour by position in trait space (stable, but two distant clades 
 collide), or track lineage ancestry to give each clade a persistent id (correct, more
 work — see #2).
 
-## Known limitation — size is below the noise floor
+## Resolved — size and the size/foraging confound
 
-Size buys only a slightly wider bite radius while carrying the steepest metabolic cost
-of the three traits. Measured famine-vs-glut mean size differs by ~0.03 and has
-FLIPPED SIGN between builds, so `test-selection.js` deliberately does not assert a
-direction on it — asserting it would be fitting a test to noise. Speed and sense, by
-contrast, separate by 1.16 and 15.6 across the plains/oasis axis.
+Two items that used to live here are retired, not forgotten:
 
-This is a real design gap, not a tuning problem: a trait needs a payoff proportional to
-its cost, and size's cost is the steepest of the three. Backlog #1 (predation) is the
-intended fix and would give size a payoff that scales with the trait.
-
-## Planned — #1 Predation / contest competition (not built)
-
-Give size a payoff that justifies its metabolic price. Two candidate mechanisms:
-
-- **Predation.** An organism above a size ratio (~1.35x) can consume a smaller one,
-  gaining a fraction of its energy. Creates a genuine arms race and the possibility of
-  stable size polymorphism — small-and-cheap versus large-and-predatory — which is the
-  most interesting outcome this sim could produce.
-- **Contest competition.** Where several organisms reach one food item, share it by
-  size^2 rather than first-come. Cheaper to implement, less dramatic, and closer to the
-  classic scramble-vs-contest ecology literature.
-
-Predation is the better feature and the harder one; it needs a second spatial query per
-tick, so watch the frame budget. Suggested: contest first as a slice, predation after.
-
-Model tier: heavier — this is balance design, not wiring.
-
-## Known confound — species differ on two axes at once
-
-Since slice B, species differ in diet AND in speed/sense. On a single resource the
-species whose starting diet is nearest that resource wins on a dietary head start
-regardless of how well it forages — this silently broke slice A's exclusion test, which
-had been reporting Sprinter winning everywhere. `test-species.js` now equalises diet
-before measuring the speed/sense axis, and `test-niche.js` tests the diet axis on its
-own terms.
-
-Worth considering whether species should differ on ONE axis only, with the other
-inherited from a shared default. It would make every result easier to attribute, at the
-cost of making the species feel less distinct.
+- **"Size is below the noise floor"** was true through M1-M4 (measured famine-vs-glut
+  difference ~0.03, sign-unstable) and is no longer true. M5's predation fixed it —
+  mean size 0.67 -> 1.80 against an identical no-predation twin. See the M5 section
+  above for the full finding, including the bistability result. Contest competition
+  (the cheaper alternative mechanism originally scoped alongside predation) remains
+  unbuilt and is tracked as backlog #23, now as a comparison point against predation's
+  outcome rather than as the fallback if predation didn't work.
+- **"Species differ on two axes at once"** described a confound in the hardcoded
+  3-species architecture (Sprinter/Watcher/Forager). That architecture no longer
+  exists — M3 replaced it with one ancestral population and emergent, derived
+  species — so the confound it described cannot occur anymore. `test-species.js`,
+  which existed specifically to guard against it, was deleted in the same release.
 
 ## Planned — #2 Lineage tracking (not built)
 
