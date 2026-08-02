@@ -44,6 +44,18 @@ check('zoom is capped at 24x for anatomical inspection', _camera.zoom === VIEW_M
 resetWellView();
 check('reset restores fitted zoom and world centre',
       _camera.zoom===1 && _camera.cx===state.cfg.w/2 && _camera.cy===state.cfg.h/2);
+check('shared lineage focus sets the 2D world centre and bounded zoom',
+      focusWellOn(123,234,5)===true&&_camera.cx===123&&_camera.cy===234&&_camera.zoom===5);
+resetWellView();
+
+const markerEntries=[
+  {id:1,type:'start',tick:0},{id:2,type:'environment',tick:60},{id:3,type:'speciation',tick:90},{id:4,type:'extinction',tick:120},
+];
+const markers=timelineMarkerPositions([30,60,90],markerEntries,120,3);
+check('timeline markers map notebook ticks onto analytical columns',
+      markers.length===2&&markers[0].entry.id===2&&Math.abs(markers[0].x-40)<1e-9&&Math.abs(markers[1].x-80)<1e-9);
+check('timeline markers exclude baselines and events outside the visible window',
+      !markers.some(m=>m.entry.type==='start'||m.entry.tick===120));
 
 let threw=null;
 try{ for(let i=0;i<800;i++) step(); drawAll(); }catch(e){ threw=e; }
@@ -61,6 +73,9 @@ check('ribbon buffer populated', state.ribbon.length > 5);
 check('census buffer populated', state.census.length >= 1);
 check('ribbon histograms have one entry per trait',
       Object.keys(state.ribbon[0]).length === TRAITS.length);
+UI.selectedLineageId=state.clades[0].id;
+try{drawWell();drawCensus();}catch(e){threw=e;}
+check('lineage-highlighted map and census draw without mutating the render path',threw===null);
 
 /* Clade colours must be valid for any index, including past the end of the palette
    (a run can produce more species than we have colours for, and must wrap rather

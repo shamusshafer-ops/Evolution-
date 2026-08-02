@@ -20,11 +20,17 @@ check('3D world renderer exposes draw, fit, disposal, and camera contracts',
       typeof drawThreeWorld==='function'&&typeof fitThreeRender==='function'&&
       typeof disposeThreeRender==='function'&&
       typeof panThreeWorldBy==='function'&&typeof zoomThreeWorldAt==='function'&&
-      typeof rotateThreeWorldBy==='function'&&typeof resetThreeWorldView==='function');
+      typeof rotateThreeWorldBy==='function'&&typeof resetThreeWorldView==='function'&&
+      typeof focusThreeWorldOn==='function');
 check('3D specimen renderer exposes draw and interaction contracts',
       typeof drawThreeSpecimens==='function'&&typeof bindThreeSpecimenControls==='function');
 check('organic tapered mesh builder is available to detailed anatomy',
       typeof _threeOrganicTube==='function');
+const focusState=stateSnapshot();
+focusThreeWorldOn(117,229,4);
+check('3D lineage focus stores the requested world centre and zoom even before renderer startup',
+      _threeWorldView.cx===117&&_threeWorldView.cy===229&&_threeWorldView.zoom===4);
+check('3D lineage focus is render-only',stateSnapshot()===focusState);
 
 let selectionLayout=null,selectionScale=null;
 if(typeof _threeLayoutCardRow==='function'&&typeof _threeCardSelections!=='undefined'){

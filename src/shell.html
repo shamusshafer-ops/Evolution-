@@ -339,8 +339,8 @@
         <button id="btnFull" title="Fullscreen" aria-label="Toggle fullscreen" aria-pressed="false">&#9906;</button>
       </div>
     </div>
-    <canvas id="census" aria-label="Population by species over time"></canvas>
-    <canvas id="ribbon" aria-label="Trait drift over generations"></canvas>
+    <canvas id="census" aria-label="Population by stable lineage over time with Field Notebook event markers"></canvas>
+    <canvas id="ribbon" aria-label="Population trait drift over time with Field Notebook event markers"></canvas>
   </div>
 
   <aside>
@@ -493,10 +493,15 @@
       species. Species are not designed in; they're derived from who can still
       interbreed.</li>
       <li><b>Census strip</b> &mdash; population by species over time. A new coloured
-      band appearing is a speciation event happening live.</li>
+      band appearing is a speciation event happening live. Notebook events appear as
+      vertical tick markers; selecting an entry brightens its marker.</li>
       <li><b>Drift ribbon</b> &mdash; each trait's distribution across the
       population, sliding through generations. A bright core migrating up or down a
-      band <i>is</i> natural selection, made visible.</li>
+      band <i>is</i> natural selection, made visible. Tick labels bound the visible
+      observation window.</li>
+      <li><b>Lineage focus</b> &mdash; select a species, specimen, or linked Notebook
+      entry to locate it on the map and isolate its stable census band. Follow keeps
+      the camera centred as the population moves; manual navigation releases it.</li>
     </ul>
 
     <h3>The traits</h3>

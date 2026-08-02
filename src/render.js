@@ -109,6 +109,18 @@ function resetWellView(){
   updateViewTransform();
 }
 
+function selectedLineageIdForRender(){
+  return typeof UI!=='undefined'&&Number.isFinite(UI.selectedLineageId)?UI.selectedLineageId:null;
+}
+
+function focusWellOn(x,y,zoom){
+  if(_use3D&&typeof focusThreeWorldOn==='function')return focusThreeWorldOn(x,y,zoom);
+  if(!_well||!Number.isFinite(x)||!Number.isFinite(y))return false;
+  _camera.cx=x;_camera.cy=y;
+  if(Number.isFinite(zoom))_camera.zoom=Math.max(VIEW_MIN_ZOOM,Math.min(VIEW_MAX_ZOOM,zoom));
+  updateViewTransform();return true;
+}
+
 function panWellBy(clientDx, clientDy){
   if(_use3D&&typeof panThreeWorldBy==='function'){panThreeWorldBy(clientDx,clientDy);return;}
   if (!_well || !_view.scale) return;
@@ -549,10 +561,12 @@ function drawWell(){
   const worldPad=12/Math.max(0.001,s);
   const viewLeft=(-_view.ox)/s-worldPad,viewRight=(_well.width-_view.ox)/s+worldPad;
   const viewTop=(-_view.oy)/s-worldPad,viewBottom=(_well.height-_view.oy)/s+worldPad;
+  const selectedLineage=selectedLineageIdForRender();
   for (const o of state.organisms){
     if(o.x<viewLeft||o.x>viewRight||o.y<viewTop||o.y>viewBottom)continue;
     const r = Math.max(1.6, o.size * 3.4 * s);
     ctx.save();
+    if(selectedLineage!=null&&o.clade!==selectedLineage)ctx.globalAlpha=.16;
     ctx.translate(X(o.x), Y(o.y));
     ctx.rotate(o.dir);
     // Anatomy resolves progressively in screen space. At normal scale the head and
@@ -560,12 +574,53 @@ function drawWell(){
     // digits, jaws and fangs. Condition no longer changes transparency—starving
     // animals do not become ghosts.
     drawCreature(ctx, o, r, { detail: r >= 3 });
+    if(selectedLineage!=null&&o.clade===selectedLineage){
+      ctx.globalAlpha=1;ctx.strokeStyle=PAL.chalk;ctx.lineWidth=Math.max(1,1.15*s);
+      ctx.beginPath();ctx.arc(0,0,r*1.48,0,Math.PI*2);ctx.stroke();
+    }
     ctx.restore();
   }
 
   // frame
   ctx.strokeStyle = PAL.rule; ctx.lineWidth = 1;
   ctx.strokeRect(X(0)+0.5, Y(0)+0.5, cfg.w*s-1, cfg.h*s-1);
+}
+
+function timelineMarkerPositions(ticks,entries,width,minColumns){
+  if(!ticks||!ticks.length||!entries||!entries.length||!Number.isFinite(width))return[];
+  const first=ticks[0],last=ticks[ticks.length-1],cols=Math.max(ticks.length,minColumns||120);
+  const step=ticks.length>1?(last-first)/(ticks.length-1):1;
+  return entries.filter(e=>e.type!=='start'&&e.tick>=first&&e.tick<=last).map(e=>({
+    entry:e,x:((e.tick-first)/Math.max(1e-9,step))*width/cols,
+  }));
+}
+
+function timelineMarkerColor(entry){
+  if(entry&&entry.color)return entry.color;
+  if(!entry)return PAL.chalkDim;
+  if(entry.type==='intervention')return PAL.warn;
+  if(entry.type==='environment')return PAL.food;
+  if(entry.type==='adaptation')return PAL.size;
+  if(entry.type==='speciation'||entry.type==='merge')return PAL.sense;
+  if(entry.type==='extinction')return PAL.speed;
+  return PAL.chalkDim;
+}
+
+function drawTimelineEvidence(ctx,ticks,W,H){
+  if(!ctx||!state)return;
+  const selected=typeof UI!=='undefined'?UI.selectedNotebookId:null;
+  for(const marker of timelineMarkerPositions(ticks,state.notebook||[],W,120)){
+    const active=selected!=null&&marker.entry.id===selected;
+    ctx.globalAlpha=active?1:.48;ctx.strokeStyle=active?PAL.chalk:timelineMarkerColor(marker.entry);
+    ctx.lineWidth=active?2:1;ctx.beginPath();ctx.moveTo(marker.x+.5,0);ctx.lineTo(marker.x+.5,H);ctx.stroke();
+    ctx.fillStyle=active?PAL.chalk:timelineMarkerColor(marker.entry);ctx.fillRect(marker.x-2,0,active?5:3,active?6:4);
+  }
+  ctx.globalAlpha=1;
+  if(ticks&&ticks.length){
+    const dpr=Math.min(2,window.devicePixelRatio||1);ctx.font=`600 ${Math.round(8*dpr)}px ui-monospace, Menlo, monospace`;
+    ctx.textBaseline='bottom';ctx.fillStyle=PAL.chalkDim;ctx.fillText(`tick ${Number(ticks[0]).toLocaleString()}`,5,H-3);
+    ctx.textAlign='right';ctx.fillText(`tick ${Number(ticks[ticks.length-1]).toLocaleString()}`,W-5,H-3);ctx.textAlign='left';
+  }
 }
 
 /* ---------- The drift ribbon ----------
@@ -625,6 +680,7 @@ function drawRibbon(){
     ctx.strokeStyle = PAL.rule; ctx.lineWidth = 1;
     ctx.strokeRect(0.5, top+0.5, W-1, bh-1);
   });
+  drawTimelineEvidence(ctx,state.ribbonTicks||[],W,H);
 }
 
 
@@ -656,31 +712,41 @@ function drawCensus(){
   let peak = 1;
   for (const s of hist){
     let tot = 0;
-    for (const v of (s.clades||[])) tot += v;
+    for (const item of (s.lineages||[])) tot += item.n;
+    if(!(s.lineages||[]).length)for(const v of (s.clades||[]))tot+=v;
     if (tot > peak) peak = tot;
   }
 
   const cw = W / Math.max(hist.length, 120);
+  const selectedLineage=selectedLineageIdForRender();
   for (let i = 0; i < hist.length; i++){
     const s = hist[i];
     let acc = 0;
-    const sizes = s.clades || [];
-    for (let id = 0; id < sizes.length; id++){
-      const v = sizes[id];
+    const lineages=(s.lineages&&s.lineages.length)?s.lineages:(s.clades||[]).map((n,id)=>({id,n}));
+    for (const lineage of lineages){
+      const id=lineage.id,v=lineage.n;
       if (v <= 0){ continue; }
       const h0 = (acc / peak) * H;
       const h1 = ((acc + v) / peak) * H;
+      ctx.globalAlpha=selectedLineage==null||id===selectedLineage?1:.14;
       ctx.fillStyle = cladeColor(Number(id));
       ctx.fillRect(i*cw, H - h1, Math.max(1, cw + 0.6), Math.max(1, h1 - h0));
       acc += v;
     }
   }
+  ctx.globalAlpha=1;
+
+  drawTimelineEvidence(ctx,hist.map(s=>s.tick),W,H);
 
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   ctx.font = `600 ${Math.round(9.5*dpr)}px ui-monospace, Menlo, monospace`;
   ctx.textBaseline = 'top';
   ctx.fillStyle = PAL.chalkDim;
-  ctx.fillText('CENSUS \u00b7 ' + ((hist[hist.length-1]||{}).nClades || 0) + ' SPECIES', 6, 4);
+  const latest=hist[hist.length-1]||{},selectedNow=(latest.lineages||[]).find(l=>l.id===selectedLineage);
+  const censusLabel=selectedLineage==null
+    ?'CENSUS \u00b7 '+(latest.nClades||0)+' SPECIES'
+    :`CENSUS · ${cladeName(selectedLineage).toUpperCase()} ${selectedNow?selectedNow.n:0} ALIVE`;
+  ctx.fillText(censusLabel, 6, 4);
   ctx.textAlign = 'right';
   ctx.fillText('peak ' + peak, W - 6, 4);
   ctx.textAlign = 'left';

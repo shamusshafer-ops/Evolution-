@@ -80,6 +80,7 @@ function makeState(opts){
              flockTicks:0, kinTransfers:0, sharedEnergy:0, careEnergy:0 },
     history: [],          // per-sample trait means
     ribbon: [],           // per-sample trait HISTOGRAMS, for the drift ribbon
+    ribbonTicks: [],      // exact tick for each ribbon column; kept separate so trait keys stay pure
     sampleEvery: 30,
     censusSampleEvery: 240,  // 8x coarser than sampleEvery -- see sampleCensus()
   };
@@ -583,6 +584,10 @@ function reproduceSexual(a, b){
   }
   const childCosmetic=inheritCosmeticGenome(a,b,state.nextId,state.seed);
   const child = makeOrganism(a.x, a.y, childTraits, Math.max(a.gen, b.gen) + 1, childAdapt, childCosmetic);
+  // Between coarse species censuses, descendants retain a parent's display lineage.
+  // computeSpecies() remains the authority and may reassign them at the next census;
+  // this field is never used by mating, survival, or any other ecological rule.
+  child.clade=a.clade;
   child.parents=[a.id,b.id];
   child.grandparents=[...(new Set([...(a.parents||[]),...(b.parents||[])]))].slice(0,4);
   child.energy = giveA + giveB + careEnergy;
@@ -981,6 +986,24 @@ function representativeOrganismForLineage(lineageId){
     if(d<bestD){bestD=d;best=o;}
   }
   return best;
+}
+
+/* Wrapped spatial centre and extent of a living lineage. Coordinates are unwrapped
+   relative to a real member before averaging, so a group straddling the toroidal map
+   edge focuses near that edge instead of falsely centring on the opposite side. */
+function lineageMapTarget(lineageId){
+  if(!state)return null;
+  const members=state.organisms.filter(o=>o.clade===lineageId);
+  if(!members.length)return null;
+  const cfg=state.cfg,ref=members[0];let dxSum=0,dySum=0;
+  for(const o of members){dxSum+=cfg.wrap?wrapDelta(o.x-ref.x,cfg.w):o.x-ref.x;dySum+=cfg.wrap?wrapDelta(o.y-ref.y,cfg.h):o.y-ref.y;}
+  let x=ref.x+dxSum/members.length,y=ref.y+dySum/members.length;
+  if(cfg.wrap){x=((x%cfg.w)+cfg.w)%cfg.w;y=((y%cfg.h)+cfg.h)%cfg.h;}
+  else{x=clamp(x,0,cfg.w);y=clamp(y,0,cfg.h);}
+  let spanX=0,spanY=0;
+  for(const o of members){spanX=Math.max(spanX,Math.abs(cfg.wrap?wrapDelta(o.x-x,cfg.w):o.x-x));spanY=Math.max(spanY,Math.abs(cfg.wrap?wrapDelta(o.y-y,cfg.h):o.y-y));}
+  const extent=Math.max(spanX/Math.max(1,cfg.w),spanY/Math.max(1,cfg.h));
+  return {lineageId,x,y,n:members.length,spanX,spanY,zoom:clamp(0.38/Math.max(.001,extent),1,8)};
 }
 
 /* ---------- Predation ----------
@@ -1521,6 +1544,8 @@ function sampleHistory(){
   for (const t of TRAITS) col[t.key] = traitHistogram(t.key, 26);
   state.ribbon.push(col);
   if (state.ribbon.length > 260) state.ribbon.shift();
+  state.ribbonTicks.push(state.tick);
+  if(state.ribbonTicks.length>260)state.ribbonTicks.shift();
 
   // computeSpecies() is deliberately NOT called here. See sampleCensus() below —
   // this function stays cheap (O(pop)) so it can run every 30 ticks without cost.
@@ -1550,7 +1575,8 @@ function sampleCensus(){
       lineage:cladeName(id),lineageId:id,detail:`last viable census: ${n} organisms`,
       message:'No living members remain. This records disappearance, not a single inferred cause.'});
   }
-  const cen = { tick: state.tick, clades: (state.clades||[]).map(c=>c.n), nClades: viableSpeciesCount() };
+  const cen = { tick: state.tick, clades: (state.clades||[]).map(c=>c.n),
+    lineages:(state.clades||[]).map(c=>({id:c.id,n:c.n})),nClades: viableSpeciesCount() };
   state.census.push(cen);
   if (state.census.length > 260) state.census.shift();
   detectSpeciation();

@@ -39,7 +39,7 @@ cat tests/harness.js build/evo.js tests/test-NAME.js | node
 
 There is no `npm test` — the suite is 18 files, run one at a time. `tests/harness.js`
 provides the browser-free globals (`document`, `window`, etc.) that let `sim.js` run
-headless. Current files (522 checks total as of this handoff): `test-core.js`,
+headless. Current files (535 checks total as of this handoff): `test-core.js`,
 `test-niche.js`, `test-render.js`, `test-selection.js`, `test-speciation.js`,
 `test-ui.js`, `test-environment.js`, `test-predation.js`, `test-adaptations.js`,
 `test-lineage.js`, `test-learning.js`, `test-carnivory.js`,
@@ -120,7 +120,8 @@ touching a threshold, and say so in the commit message the way past commits have
 
 ## Where things currently stand (as of this handoff)
 
-- **R0's observability and paired-research slices are shipped.** `state.notebook` durably records the
+- **R0's observability and paired-research slices are shipped.** `state.notebook`
+  durably records the
   baseline, automatic planet events, steward interventions, adaptation births, splits,
   merges, and extinctions with contemporaneous evidence. Species/specimen selection
   opens a real-organism inspector backed by the exact `energyCostBreakdown()` used by
@@ -129,6 +130,13 @@ touching a threshold, and say so in the commit message the way past commits have
   runs five isolated paired seeds and reports paired mean ± sample SD, Cohen's dz,
   seed/ruleset metadata, incomplete pairs, and contrary seeds. Scenarios are grouped
   into four conceptual families.
+- **R0 lineage focus and graph evidence are shipped.** Census rows now retain
+  `{id,n}` lineage records in addition to the legacy rank-count array. Species,
+  specimen, and linked Notebook selection locate a wrap-aware population centre;
+  optional Follow works in both renderers and releases on manual navigation. Selected
+  lineages highlight on the map and census. `ribbonTicks` aligns trait columns with
+  Notebook markers without polluting trait-key objects. The ribbon is still a
+  population-wide distribution—do not describe it as lineage-filtered history.
 - **M1–M10 shipped and stable**: allometric traits, niche partitioning, emergent
   sympatric + allopatric speciation, environmental dynamics (shocks/seasons/
   migration), predation with a measured bistability result, discrete adaptations
@@ -201,12 +209,18 @@ touching a threshold, and say so in the commit message the way past commits have
 - Extinctions are recorded after census only once per lineage. A lineage absorbed by an
   explicit merge is not also labelled extinct. If a selected organism dies, lineage
   inspection falls back to a real extant representative rather than inventing one.
+- `o.clade` between censuses is display metadata only. Newborns inherit a parent's
+  display lineage so Follow remains continuous; `computeSpecies()` remains authoritative
+  and no ecological or mating rule may depend on `o.clade`.
+- Keep `state.ribbonTicks` exactly aligned and capped with `state.ribbon`. Census code
+  should prefer `row.lineages` for stable ids while retaining `row.clades` for backward
+  compatibility. Timeline markers exclude the baseline and only plot events inside the
+  visible tick window. Camera focus and selection highlighting must remain RNG-free.
 
 **Next product decision:** finish R0 before starting contingent eras. The strongest next
-slice is graph event markers plus map-level lineage follow, so notebook evidence can
-take the player directly to the population and time series it describes. The research
-runner can later become a reusable workbench with saved/exported protocols, configurable
-replicates, and additional controlled pairs. #32 then begins contingent eras:
+slice is before/after Notebook evidence plus phase labels and historical lineage-specific
+trait distributions. The research runner can later become a reusable workbench with
+saved/exported protocols, configurable replicates, and additional controlled pairs. #32 then begins contingent eras:
 environmental opportunity plus a rare, lineage-specific key innovation, never a fixed
 skill-tree sequence. Timeline compression (#34) remains separate. See the design review
 at the top of `ROADMAP.md`; keep Experiment-mode RNG and measured results reproducible.

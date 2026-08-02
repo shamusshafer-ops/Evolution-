@@ -14,7 +14,10 @@ that's altered what the sim does.
 The **Field Notebook** keeps the run's baseline, environmental events, interventions,
 new adaptations, lineage changes, and extinctions instead of letting their evidence
 vanish with a toast. Select a species or specimen to inspect a real organism's energy
-costs and life history. The **Research** card can capture Plains and Oasis at the same
+costs and life history. That selection also locates and highlights the lineage on the
+map and census; optional Follow tracks its wrap-aware population centre until the player
+navigates manually. Notebook events are tick-aligned markers on both analytical graphs.
+The **Research** card can capture Plains and Oasis at the same
 seed and tick 6,000 for an honest paired observation, or run five paired seeds itself.
 The batch reports mean differences, sample variability, standardized paired effects,
 the full seed list, and contrary or incomplete runs. It restores the live world and RNG

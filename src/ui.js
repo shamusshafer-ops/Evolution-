@@ -6,7 +6,7 @@
 const UI = { els:{}, lastPaint:0, autoPaused:false, cssFullscreen:false,
   selectedOrganismId:null, selectedLineageId:null, selectedNotebookId:null,
   notebookSignature:'', comparisonRuns:{plains:null,oasis:null},
-  batchComparison:null,batchRunning:false,batchError:'' };
+  batchComparison:null,batchRunning:false,batchError:'',followLineage:false };
 const COMPARISON_TICK=6000;
 const BATCH_REPLICATES=5;
 
@@ -157,7 +157,9 @@ function selectOrganism(id){
   const o=organismById(Number(id));
   UI.selectedOrganismId=o?o.id:Number(id);
   if(o)UI.selectedLineageId=o.clade;
+  if(o&&typeof focusWellOn==='function')focusWellOn(o.x,o.y,6);
   paintInspector();paintSpecies();
+  if(typeof drawWell==='function')drawWell();if(typeof drawCensus==='function')drawCensus();
   return o;
 }
 
@@ -165,8 +167,29 @@ function selectLineage(id){
   UI.selectedLineageId=Number(id);
   const o=representativeOrganismForLineage(UI.selectedLineageId);
   UI.selectedOrganismId=o?o.id:null;
+  locateLineage(UI.selectedLineageId);
   paintInspector();paintSpecies();
   return o;
+}
+
+function locateLineage(id){
+  const target=lineageMapTarget(Number(id));
+  if(!target)return null;
+  if(typeof focusWellOn==='function')focusWellOn(target.x,target.y,target.zoom);
+  if(typeof drawWell==='function')drawWell();if(typeof drawCensus==='function')drawCensus();
+  return target;
+}
+
+function stopLineageFollow(){
+  if(!UI.followLineage)return false;
+  UI.followLineage=false;paintInspector();return true;
+}
+
+function toggleLineageFollow(){
+  if(UI.selectedLineageId==null||!lineageMapTarget(UI.selectedLineageId))return false;
+  UI.followLineage=!UI.followLineage;
+  if(UI.followLineage)locateLineage(UI.selectedLineageId);
+  paintInspector();return UI.followLineage;
 }
 
 function inspectorHtml(o){
@@ -186,15 +209,21 @@ function inspectorHtml(o){
     `<dt>Adaptations</dt><dd>${fmt(cost.adaptations,3)}</dd><dt>Cognition</dt><dd>${fmt(cost.cognition,3)}</dd>`+
     `<dt>Total</dt><dd>${fmt(cost.total,3)}</dd></dl><h3>Inherited phenotype</h3>`+
     `<dl class="stats compact">${traitRows}</dl><p class="inspectNote"><b>Adaptations:</b> ${active.length?escHtml(active.join(', ')):'none'}. `+
-    `Learned escape skill ${fmt(o.learned||0,3)} is acquired within this lifetime and is not inherited.</p>`;
+    `Learned escape skill ${fmt(o.learned||0,3)} is acquired within this lifetime and is not inherited.</p>`+
+    `<div class="row"><button type="button" id="btnLocateLineage" class="chip">Locate lineage</button>`+
+    `<button type="button" id="btnFollowLineage" class="chip${UI.followLineage?' on':''}" aria-pressed="${UI.followLineage}">${UI.followLineage?'Stop following':'Follow lineage'}</button></div>`;
 }
 
 function paintInspector(){
   const host=$('inspector');if(!host||!state)return;
   let o=UI.selectedOrganismId==null?null:organismById(UI.selectedOrganismId);
   if(!o&&UI.selectedLineageId!=null)o=representativeOrganismForLineage(UI.selectedLineageId);
-  if(o)UI.selectedOrganismId=o.id;
+  if(o){UI.selectedOrganismId=o.id;if(UI.followLineage){const target=lineageMapTarget(o.clade);if(target&&typeof focusWellOn==='function')focusWellOn(target.x,target.y,target.zoom);}}
+  else UI.followLineage=false;
   host.innerHTML=inspectorHtml(o);
+  const locate=$('btnLocateLineage'),follow=$('btnFollowLineage');
+  if(locate)locate.onclick=()=>locateLineage(UI.selectedLineageId);
+  if(follow)follow.onclick=toggleLineageFollow;
 }
 
 function notebookLabel(entry){
@@ -475,7 +504,7 @@ function restart(opts){
   const wasRunning = state ? state.running : true;
   initWorld({ seed, scenario });
   UI.selectedOrganismId=null; UI.selectedLineageId=null; UI.selectedNotebookId=null;
-  UI.notebookSignature='';
+  UI.notebookSignature='';UI.followLineage=false;
   const toastHost = $('toasts');
   if (toastHost) toastHost.innerHTML = '';   // a toast from the old run mid-animation would otherwise linger, naming a species that no longer exists
   if ($('seed')) $('seed').value = seed;
@@ -646,6 +675,7 @@ function bindWellNavigation(){
 
   well.addEventListener('pointerdown', e => {
     if (e.pointerType === 'mouse' && e.button !== 0 && !(_use3D&&e.button===2)) return;
+    stopLineageFollow();
     pointers.set(e.pointerId, point(e));
     if (well.setPointerCapture) well.setPointerCapture(e.pointerId);
     well.classList.add('dragging');
@@ -680,10 +710,11 @@ function bindWellNavigation(){
   well.addEventListener('pointercancel', endPointer);
   well.addEventListener('contextmenu',e=>{if(_use3D)e.preventDefault();});
   well.addEventListener('wheel', e => {
+    stopLineageFollow();
     zoomWellAt(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
     repaint(); e.preventDefault();
   }, { passive:false });
-  well.addEventListener('dblclick', () => { resetWellView(); repaint(); });
+  well.addEventListener('dblclick', () => { stopLineageFollow();resetWellView(); repaint(); });
   well.addEventListener('keydown', e => {
     const pan = 36;
     if (e.key === 'ArrowLeft') panWellBy(pan,0);
@@ -696,17 +727,17 @@ function bindWellNavigation(){
     else if (_use3D&&(e.key==='e'||e.key==='E')&&typeof rotateThreeWorldBy==='function') rotateThreeWorldBy(26,0);
     else if (e.key === '0') resetWellView();
     else return;
-    repaint(); e.preventDefault();
+    stopLineageFollow();repaint(); e.preventDefault();
   });
 
   const viewRun = $('btnViewRun');
   if (viewRun) viewRun.onclick = () => setRunning(!state.running);
   const zoomIn = $('btnZoomIn');
-  if (zoomIn) zoomIn.onclick = () => { zoomWellAt(1.35); repaint(); };
+  if (zoomIn) zoomIn.onclick = () => { stopLineageFollow();zoomWellAt(1.35); repaint(); };
   const zoomOut = $('btnZoomOut');
-  if (zoomOut) zoomOut.onclick = () => { zoomWellAt(1/1.35); repaint(); };
+  if (zoomOut) zoomOut.onclick = () => { stopLineageFollow();zoomWellAt(1/1.35); repaint(); };
   const reset = $('btnViewReset');
-  if (reset) reset.onclick = () => { resetWellView(); repaint(); };
+  if (reset) reset.onclick = () => { stopLineageFollow();resetWellView(); repaint(); };
 }
 
 function bindUI(){

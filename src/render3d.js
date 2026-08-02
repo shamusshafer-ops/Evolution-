@@ -145,6 +145,9 @@ function _threePixelRatio(){
   return Math.min(2, typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1);
 }
 function _threeState(){ return typeof state !== 'undefined' ? state : null; }
+function _threeSelectedLineage(){
+  return typeof UI!=='undefined'&&Number.isFinite(UI.selectedLineageId)?UI.selectedLineageId:null;
+}
 function _threeConfig(){
   const s = _threeState();
   if (s && s.cfg) return s.cfg;
@@ -238,6 +241,8 @@ function _threeBuildWorldBatches(){
   const feather = _threeMaterial('world-feather','#ffffff',{vertexColors:true,roughness:0.82,emissive:'#435951',emissiveIntensity:0.82,doubleSide:true});
   const flockHalo = _threeMaterial('world-flock',_threeAdaptationColor('flocking','#58B7D9'),
     {basic:true,transparent:true,opacity:.32,depthWrite:false,doubleSide:true,toneMapped:false});
+  const selectionHalo = _threeMaterial('world-selection','#F2FAF7',
+    {basic:true,transparent:true,opacity:.86,depthWrite:false,doubleSide:true,toneMapped:false});
   for (const key of ['torso','shoulder','pelvis','head','snout','jaw','footFL','footFR','footHL','footHR',
     'camoA','camoB','patternA','patternB','patternC','tailJ0','tailJ1','tailJ2','tailJ3','furRuff']){
     _threeMakeWorldPart(key,_threeGeometry('sphere'),key.startsWith('camo')?dark:skin);
@@ -253,6 +258,7 @@ function _threeBuildWorldBatches(){
   _threeMakeWorldPart('featherMantle',_threeGeometry('feather'),feather);
   for (const key of ['fangL','fangR','clawFL','clawFR','hornL','hornR','tailTuft']) _threeMakeWorldPart(key,_threeGeometry('cone'),dark);
   _threeMakeWorldPart('flockHalo',_threeGeometry('halo'),flockHalo);
+  _threeMakeWorldPart('selectionHalo',_threeGeometry('halo'),selectionHalo);
   if (T.ColorManagement && 'enabled' in T.ColorManagement) T.ColorManagement.enabled = true;
 }
 
@@ -411,6 +417,13 @@ function resetThreeWorldView(){
   return _threeReady;
 }
 
+function focusThreeWorldOn(x,y,zoom){
+  if(!Number.isFinite(x)||!Number.isFinite(y))return false;
+  _threeWorldView.cx=x;_threeWorldView.cy=y;
+  if(Number.isFinite(zoom))_threeWorldView.zoom=_threeClamp(zoom,_THREE_MIN_ZOOM,_THREE_MAX_ZOOM);
+  _threeUpdateWorldCamera();return _threeReady;
+}
+
 function _threeGroundAtClient(clientX,clientY){
   const T=_threeApi();
   if (!_threeReady||!T||!_threeWorldCamera||!_threeMapCanvas)return null;
@@ -481,7 +494,7 @@ function _threeUpdateCreatureBatches(){
   const T=_threeApi(),s=_threeState();
   if(!s||!_threeWorldParts)return;
   const pop=(s.organisms||[]).slice(0,_threeWorldCapacity);
-  const tick=_threeFinite(s.tick,0);
+  const tick=_threeFinite(s.tick,0),selectedLineage=_threeSelectedLineage();
   for(let i=0;i<pop.length;i++){
     const o=pop[i],d=phenotype3DDescriptor(o),ad=d.adaptations;
     const gait=Math.sin(tick*(0.025+d.speed*0.035)+_threeFinite(o.id,0)*0.73);
@@ -492,6 +505,7 @@ function _threeUpdateCreatureBatches(){
       new T.Vector3(scale,scale,scale)
     );
     const base=new T.Color(d.baseColor).lerp(new T.Color(d.accentColor),0.42).lerp(new T.Color('#FFFFFF'),0.16);
+    if(selectedLineage!=null&&o.clade!==selectedLineage)base.multiplyScalar(.28);
     const dark=base.clone().multiplyScalar(0.76);
     const light=base.clone().lerp(new T.Color('#FFFFFF'),0.28);
     const y=d.stanceHeight+Math.abs(gait)*0.025;
@@ -580,6 +594,8 @@ function _threeUpdateCreatureBatches(){
     const grouped=!!(ad.flocking&&_threeFinite(o.flockN,0)>0);
     const haloScale=grouped?1.38+Math.min(3,o.flockN)*.12:1e-5;
     _threePart('flockHalo',i,root,0,-.045,0,haloScale,haloScale,haloScale,null);
+    const selectedScale=selectedLineage!=null&&o.clade===selectedLineage?1.72:1e-5;
+    _threePart('selectionHalo',i,root,0,-.052,0,selectedScale,selectedScale,selectedScale,null);
   }
   for(const mesh of Object.values(_threeWorldParts)){
     mesh.count=pop.length;mesh.instanceMatrix.needsUpdate=true;
@@ -642,10 +658,12 @@ function drawThreeWorld(){
       organisms:(s.organisms||[]).length,
       food:(s.food||[]).length,
       sites:(s.sites||[]).length,
+      selectedLineage:_threeSelectedLineage(),
     };
     const prior=_threeWorldBatchCache;
     const batchesChanged=!prior||prior.state!==nextBatchKey.state||prior.tick!==nextBatchKey.tick||
-      prior.organisms!==nextBatchKey.organisms||prior.food!==nextBatchKey.food||prior.sites!==nextBatchKey.sites;
+      prior.organisms!==nextBatchKey.organisms||prior.food!==nextBatchKey.food||prior.sites!==nextBatchKey.sites||
+      prior.selectedLineage!==nextBatchKey.selectedLineage;
     if(batchesChanged){
       _threeUpdateEnvironment();_threeUpdateCreatureBatches();
       /* Commit only after both updates succeed. A failed partial update is retried on

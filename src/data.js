@@ -4,7 +4,7 @@
    in this file so it can be tuned without reading the simulation.
    ========================================================================== */
 
-const VERSION = '0.2.1';
+const VERSION = '0.2.2';
 
 /* ---------- Changelog ----------
    Rendered inside the About panel. Newest entry first. This is a standing commitment,
@@ -14,6 +14,8 @@ const VERSION = '0.2.1';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-08-02', tag:'R0 lineage', title:'Notebook evidence now leads back to living populations',
+    text:'Selecting a species, specimen, or lineage-bearing Notebook entry now centres the map on that lineage and highlights its stable identity in both the live world and census. Locate provides a one-time view; Follow continuously tracks the population’s wrap-aware centre and automatically releases when the player navigates manually. Selected organisms receive bright map haloes while other lineages dim in both 2D and 3D. The census now stores persistent lineage ids rather than mistaking display rank for ancestry. Notebook events appear as tick-aligned markers on both analytical graphs, with the selected event emphasized and explicit visible tick bounds. These views consume no RNG and do not change ecological outcomes.' },
   { date:'2026-08-02', tag:'R0 research', title:'Five paired seeds turn an anecdote into an experiment',
     text:'The Plains/Oasis Research card can now run five reproducible paired seeds at tick 6,000. It reports the paired mean, sample standard deviation, standardized paired effect (Cohen’s dz), complete seed list, ruleset version, missing or extinct pairs, and every seed that fails either predicted direction. Ten temporary worlds run behind an isolation boundary that restores the player’s exact live world and both RNG channels afterward. Five pairs show repeatability, not universal proof; the interface says so explicitly.' },
   { date:'2026-08-02', tag:'R0', title:'A Field Notebook makes outcomes inspectable',

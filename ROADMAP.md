@@ -50,7 +50,7 @@ as accelerated phenotypic variation, never as a literal biological mutation rate
 
 ### Recommended order
 
-#### R0 — Make causes inspectable (two slices shipped 2026-08-02; remaining S–M)
+#### R0 — Make causes inspectable (three slices shipped 2026-08-02; remaining S–M)
 
 This remains the highest-value foundation. The simulation already produces more stories
 than the interface can explain.
@@ -70,17 +70,25 @@ than the interface can explain.
   ruleset, incomplete/extinct pairs, and every contrary seed. Its isolated simulations
   restore the live world and both RNG channels exactly. One seed and five seeds carry
   appropriately different—but still cautious—evidence language.
+- Selecting a species, specimen, or lineage-bearing Notebook entry now locates that
+  population on the map. Optional Follow tracks a wrap-aware population centre in 2D
+  and 3D, highlights selected organisms, dims other lineages, and releases on manual
+  navigation. The census stores stable lineage ids and isolates the selected band.
+  Both analytical graphs show tick-aligned Notebook markers, explicit visible tick
+  bounds, and a bright marker for the selected event.
 - Scenarios are grouped as Foundations, Speciation, Coevolution, and Living Worlds; the
   About panel now describes six traits, 3D organisms, model-evidence labels, and the
   procedural-planet ecosystem-steward direction.
-- The slice is guarded by 40 new checks. The full 522-check suite preserves established
+- The slices are guarded by 53 new checks. The full 535-check suite preserves established
   scenario outcomes, and build parity remains clean.
 
 **Remaining R0 work:**
 
-- Extend Notebook selection into map focus and before/after evidence, then add graph
-  event markers, phase labels, explicit axes, and lineage filters. Keep “associated
-  with,” not “caused by,” unless a controlled comparison supports causation.
+- Add before/after evidence windows, seasonal/day-night phase labels, and historical
+  lineage-specific trait distributions. Current lineage filtering is exact in the
+  census, while the trait ribbon intentionally remains population-wide until those
+  historical per-lineage distributions are recorded. Keep “associated with,” not
+  “caused by,” unless a controlled comparison supports causation.
 - Extend the current exact per-tick organism ledger with lifetime energy income and
   expenditure if those values become simulation state rather than reconstructed claims.
 - Generalize the fixed five-pair runner into a reusable experiment workbench with
@@ -90,7 +98,7 @@ than the interface can explain.
 - A same-seed comparison is not automatically a counterfactual once treatments consume
   different random draws. New Living History systems should use named or counter-based
   RNG streams while legacy scenarios keep their established stream.
-- Improve initial camera/contrast and complete follow-a-lineage camera behaviour.
+- Improve the initial unselected camera and contrast after a short usability check.
 
 **First testable iteration: passed.** The notebook, organism inspector, and one
 Plains/Oasis comparison card are live. Rendering and inspection do not advance RNG or
@@ -553,11 +561,10 @@ pins pure phenotype derivation, safe WebGL fallback, and zero RNG/state mutation
 ### Remaining from the SPORE evaluation, in owner's ranked order
 
 1. ~~Morphology~~ — shipped here
-2. **Eras / unlock thresholds** — the SPORE spine. Genuine thresholds that unlock new
-   trait axes rather than fake stage transitions. The most dangerous item on the list:
-   done badly it turns a real simulation into a skill tree with evolution flavouring.
-3. **Follow a lineage** — camera follows a clade, UI filters to it, notifications
-   become about YOUR species. Cheap now that lineage ids persist (M8).
+2. **Contingent eras** — planned in R1 as environmental opportunity plus rare,
+   lineage-specific innovations, never a fixed threshold sequence or skill tree.
+3. ~~Follow a lineage~~ — shipped 2026-08-02 with wrap-aware 2D/3D camera follow,
+   selected-population highlighting, stable census filtering, and Notebook links.
 4. **Compress the timeline** — the 3-minute dead zone measured above.
 
 Owner's direction on scope: BOTH science mode and game mode, sharing one engine. The

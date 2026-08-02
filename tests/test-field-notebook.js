@@ -126,5 +126,27 @@ check('actual batch analysis reports all complete pairs without requiring a posi
   actualAssessment.valid&&actualAssessment.n===2&&actualAssessment.speed.n===2&&actualAssessment.sense.n===2);
 check('running the full batch also restores the live world',state===liveState&&state.tick===liveTick);
 
+initWorld({seed:'lineage-map',scenario:'temperate'});
+for(let i=0;i<240;i++)step();
+check('ribbon columns retain exact aligned tick metadata',
+  state.ribbonTicks.length===state.ribbon.length&&state.ribbonTicks.at(-1)===240);
+check('census rows retain stable lineage ids alongside compatibility counts',
+  state.census.at(-1).lineages.length===state.census.at(-1).clades.length&&
+  state.census.at(-1).lineages[0].id===state.clades[0].id);
+const mapLineage=state.clades[0].id,mapMembers=state.organisms.filter(o=>o.clade===mapLineage);
+mapMembers[0].x=2;mapMembers[1].x=state.cfg.w-2;
+for(let i=2;i<mapMembers.length;i++)mapMembers[i].x=1;
+const mapTarget=lineageMapTarget(mapLineage);
+check('lineage map target includes the living lineage and a bounded useful zoom',
+  mapTarget.n===mapMembers.length&&mapTarget.zoom>=1&&mapTarget.zoom<=8);
+check('wrapped lineage focus stays near a population crossing the map edge',
+  mapTarget.x<state.cfg.w*.1||mapTarget.x>state.cfg.w*.9);
+const mapA=mapMembers[0],mapB=mapMembers[1];mapA.energy=mapB.energy=LIFE.reproduceAt+100;
+const mappedChild=reproduceSexual(mapA,mapB);
+check('new descendants retain their display lineage between coarse censuses',mappedChild.clade===mapLineage);
+UI.selectedLineageId=mapLineage;UI.followLineage=false;
+check('lineage follow can be enabled for a living selected lineage',toggleLineageFollow()===true&&UI.followLineage);
+check('manual-navigation cancellation stops lineage follow',stopLineageFollow()===true&&!UI.followLineage);
+
 console.log(`\n${pass}/${pass+fail} checks passed`);
 if(fail)process.exit(1);
