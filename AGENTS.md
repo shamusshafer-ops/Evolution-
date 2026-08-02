@@ -39,7 +39,7 @@ cat tests/harness.js build/evo.js tests/test-NAME.js | node
 
 There is no `npm test` — the suite is 18 files, run one at a time. `tests/harness.js`
 provides the browser-free globals (`document`, `window`, etc.) that let `sim.js` run
-headless. Current files (505 checks total as of this handoff): `test-core.js`,
+headless. Current files (522 checks total as of this handoff): `test-core.js`,
 `test-niche.js`, `test-render.js`, `test-selection.js`, `test-speciation.js`,
 `test-ui.js`, `test-environment.js`, `test-predation.js`, `test-adaptations.js`,
 `test-lineage.js`, `test-learning.js`, `test-carnivory.js`,
@@ -120,13 +120,15 @@ touching a threshold, and say so in the commit message the way past commits have
 
 ## Where things currently stand (as of this handoff)
 
-- **R0's first observability slice is shipped.** `state.notebook` durably records the
+- **R0's observability and paired-research slices are shipped.** `state.notebook` durably records the
   baseline, automatic planet events, steward interventions, adaptation births, splits,
   merges, and extinctions with contemporaneous evidence. Species/specimen selection
   opens a real-organism inspector backed by the exact `energyCostBreakdown()` used by
   metabolism. The Research card captures Plains and Oasis at tick 6,000 and compares
-  only matching seeds/ticks; its single-seed result is descriptive, not an effect-size
-  estimate. Scenarios are grouped into four conceptual families.
+  only matching seeds/ticks; its single-seed result is descriptive. The same card now
+  runs five isolated paired seeds and reports paired mean ± sample SD, Cohen's dz,
+  seed/ruleset metadata, incomplete pairs, and contrary seeds. Scenarios are grouped
+  into four conceptual families.
 - **M1–M10 shipped and stable**: allometric traits, niche partitioning, emergent
   sympatric + allopatric speciation, environmental dynamics (shocks/seasons/
   migration), predation with a measured bistability result, discrete adaptations
@@ -188,22 +190,26 @@ touching a threshold, and say so in the commit message the way past commits have
   such as the run baseline and direct steward interventions.
 - Notebook evidence collection and every inspector/render path must remain read-only and
   must never call `rnd()`. `state.notebook` resets with a run; UI comparison captures
-  deliberately survive scenario restarts so the second treatment can be collected.
+  and batch results deliberately survive scenario restarts.
 - `energyCostBreakdown()` is the source of truth for both metabolism and the inspector.
   Do not duplicate those formulas in UI code.
 - A comparison is currently valid only for Plains versus Oasis at tick 6,000 with the
-  same seed. It is one paired observation, not a replicate study or proof of causation.
+  same seed. `isolatedScenarioObservation()` must restore `state`, `_rngState`, and
+  `_spare` in `finally`; the batch runner depends on that exact boundary. Five pairs
+  support repeatability estimates but remain neither universal proof nor a perfect
+  counterfactual once treatment RNG streams diverge.
 - Extinctions are recorded after census only once per lineage. A lineage absorbed by an
   explicit merge is not also labelled extinct. If a selected organism dies, lineage
   inspection falls back to a real extant representative rather than inventing one.
 
 **Next product decision:** finish R0 before starting contingent eras. The strongest next
-slice is a batch comparison runner with seed sets, treatment metadata, variability,
-effect sizes, and negative results; graph event markers and map-level lineage follow are
-the other remaining R0 work. #32 then begins contingent eras: environmental opportunity
-plus a rare, lineage-specific key innovation, never a fixed skill-tree sequence.
-Timeline compression (#34) remains separate. See the design review at the top of
-`ROADMAP.md`; keep Experiment-mode RNG and measured results reproducible.
+slice is graph event markers plus map-level lineage follow, so notebook evidence can
+take the player directly to the population and time series it describes. The research
+runner can later become a reusable workbench with saved/exported protocols, configurable
+replicates, and additional controlled pairs. #32 then begins contingent eras:
+environmental opportunity plus a rare, lineage-specific key innovation, never a fixed
+skill-tree sequence. Timeline compression (#34) remains separate. See the design review
+at the top of `ROADMAP.md`; keep Experiment-mode RNG and measured results reproducible.
 
 ## Pushing
 

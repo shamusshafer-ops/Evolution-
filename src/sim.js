@@ -928,6 +928,25 @@ function traitStats(key){
   return { mean, sd: Math.sqrt(ss/pop.length), min, max, n: pop.length };
 }
 
+/* Run a complete observation without disturbing the world the player is watching.
+   This is intentionally synchronous: callers can yield before invoking it, while the
+   global model is swapped only for the duration of this call. `finally` restores the
+   live object and both pieces of RNG state even if a future scenario throws. */
+function isolatedScenarioObservation(scenario, seed, ticks){
+  const liveState=state,liveRngState=_rngState,liveSpare=_spare;
+  try{
+    initWorld({scenario,seed});
+    for(let i=0;i<ticks;i++)step();
+    return {
+      scenario,seed,tick:state.tick,ruleset:VERSION,extinct:!state.organisms.length,
+      pop:state.organisms.length,speed:traitStats('speed').mean,
+      sense:traitStats('sense').mean,size:traitStats('size').mean,
+    };
+  }finally{
+    state=liveState;_rngState=liveRngState;_spare=liveSpare;
+  }
+}
+
 function traitHistogram(key, bins){
   bins = bins || 24;
   const t = traitDef(key);

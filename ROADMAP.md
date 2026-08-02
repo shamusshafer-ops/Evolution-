@@ -50,12 +50,12 @@ as accelerated phenotypic variation, never as a literal biological mutation rate
 
 ### Recommended order
 
-#### R0 — Make causes inspectable (first slice shipped 2026-08-02; remaining S–M)
+#### R0 — Make causes inspectable (two slices shipped 2026-08-02; remaining S–M)
 
 This remains the highest-value foundation. The simulation already produces more stories
 than the interface can explain.
 
-**First slice shipped:**
+**Shipped R0 work:**
 
 - A durable Field Notebook records the baseline, environmental events, steward
   interventions, adaptation births, lineage splits/merges, and extinctions. Every entry
@@ -65,13 +65,15 @@ than the interface can explain.
   exposes the exact per-tick basal, travel, sensory, adaptation, and cognition costs;
   energy, age, food eaten, offspring, encounters, escapes, kills, parents, patch,
   inherited adaptations, and learned skill.
-- A Plains/Oasis Research card captures same-seed results at tick 6,000 and reports
-  trait/population deltas with explicit one-seed and association-versus-causation
-  caveats. It rejects mismatched seeds and observation times.
+- A Plains/Oasis Research card captures same-seed results at tick 6,000 and can run a
+  five-seed paired batch. It reports paired means, sample SD, Cohen's dz, the seed list,
+  ruleset, incomplete/extinct pairs, and every contrary seed. Its isolated simulations
+  restore the live world and both RNG channels exactly. One seed and five seeds carry
+  appropriately different—but still cautious—evidence language.
 - Scenarios are grouped as Foundations, Speciation, Coevolution, and Living Worlds; the
   About panel now describes six traits, 3D organisms, model-evidence labels, and the
   procedural-planet ecosystem-steward direction.
-- The slice is guarded by 23 new checks. The full 505-check suite preserves established
+- The slice is guarded by 40 new checks. The full 522-check suite preserves established
   scenario outcomes, and build parity remains clean.
 
 **Remaining R0 work:**
@@ -81,14 +83,13 @@ than the interface can explain.
   with,” not “caused by,” unless a controlled comparison supports causation.
 - Extend the current exact per-tick organism ledger with lifetime energy income and
   expenditure if those values become simulation state rather than reconstructed claims.
-- Upgrade the single-result comparison card into paired and batch experiment runners.
-  Report effect size,
-  replicate count, seed list, variability, and negative results—not only means from a
-  single attractive run. A same-seed comparison is not automatically a counterfactual
-  once one treatment consumes extra random draws; new systems should use named or
-  counter-based RNG streams while legacy scenarios keep their established stream.
-- Add Monoculture/Oasis and Temperate/Predation experiment cards after the runner can
-  store ruleset version, seed sets, and complete treatment metadata.
+- Generalize the fixed five-pair runner into a reusable experiment workbench with
+  configurable replicate count/time, saved treatment metadata, progress/cancel, export,
+  confidence intervals where justified, and power guidance. Add Monoculture/Oasis and
+  Temperate/Predation cards on that shared contract.
+- A same-seed comparison is not automatically a counterfactual once treatments consume
+  different random draws. New Living History systems should use named or counter-based
+  RNG streams while legacy scenarios keep their established stream.
 - Improve initial camera/contrast and complete follow-a-lineage camera behaviour.
 
 **First testable iteration: passed.** The notebook, organism inspector, and one

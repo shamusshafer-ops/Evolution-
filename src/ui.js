@@ -5,8 +5,10 @@
 
 const UI = { els:{}, lastPaint:0, autoPaused:false, cssFullscreen:false,
   selectedOrganismId:null, selectedLineageId:null, selectedNotebookId:null,
-  notebookSignature:'', comparisonRuns:{plains:null,oasis:null} };
+  notebookSignature:'', comparisonRuns:{plains:null,oasis:null},
+  batchComparison:null,batchRunning:false,batchError:'' };
 const COMPARISON_TICK=6000;
+const BATCH_REPLICATES=5;
 
 function $(id){ return document.getElementById(id); }
 
@@ -257,6 +259,57 @@ function comparisonAssessment(runs){
     message:supports?'This paired run supports the prediction.':'This paired run does not support the full prediction yet.'};
 }
 
+function sampleSummary(values){
+  const xs=(values||[]).filter(Number.isFinite),n=xs.length;
+  if(!n)return {n:0,mean:null,sd:null,dz:null};
+  const mean=xs.reduce((a,b)=>a+b,0)/n;
+  const sd=n>1?Math.sqrt(xs.reduce((s,x)=>s+(x-mean)*(x-mean),0)/(n-1)):null;
+  return {n,mean,sd,dz:sd!=null&&sd>1e-12?mean/sd:null};
+}
+
+function batchComparisonAssessment(batch){
+  const pairs=batch&&Array.isArray(batch.pairs)?batch.pairs:[];
+  const valid=pairs.filter(p=>p.plains&&!p.plains.extinct&&p.oasis&&!p.oasis.extinct&&
+    p.plains.seed===p.oasis.seed&&p.plains.tick===p.oasis.tick);
+  const deltas=valid.map(p=>({seed:p.plains.seed,
+    speed:p.plains.speed-p.oasis.speed,sense:p.oasis.sense-p.plains.sense}));
+  const speed=sampleSummary(deltas.map(d=>d.speed)),sense=sampleSummary(deltas.map(d=>d.sense));
+  const negativeSeeds=deltas.filter(d=>d.speed<=0||d.sense<=0).map(d=>d.seed);
+  const missingSeeds=pairs.filter(p=>!p.plains||p.plains.extinct||!p.oasis||p.oasis.extinct||
+    p.plains.seed!==p.oasis.seed||p.plains.tick!==p.oasis.tick)
+    .map(p=>(p.plains&&p.plains.seed)||(p.oasis&&p.oasis.seed)||'unknown');
+  const supports=valid.length>=2&&speed.mean>0&&sense.mean>0;
+  let message='At least two complete paired seeds are required.';
+  if(valid.length>=2&&supports&&negativeSeeds.length===0)message=`Mean effects and all ${valid.length} pairs support the prediction.`;
+  else if(valid.length>=2&&supports)message=`Mean effects support the prediction, but ${negativeSeeds.length} pair${negativeSeeds.length===1?' does':'s do'} not show both directions.`;
+  else if(valid.length>=2)message='The batch does not support the full two-trait prediction.';
+  return {valid:valid.length>=2,supports,n:valid.length,speed,sense,negativeSeeds,missingSeeds,message};
+}
+
+function runBatchComparison(baseSeed,count){
+  const n=Math.max(2,Math.min(20,Math.floor(count||BATCH_REPLICATES)));
+  const root=String(baseSeed||'origin');
+  const seeds=Array.from({length:n},(_,i)=>`${root}/pair-${i+1}`);
+  const pairs=seeds.map(seed=>({
+    plains:isolatedScenarioObservation('plains',seed,COMPARISON_TICK),
+    oasis:isolatedScenarioObservation('oasis',seed,COMPARISON_TICK),
+  }));
+  return {experiment:'food-distribution',ruleset:VERSION,tick:COMPARISON_TICK,
+    baseSeed:root,seeds,pairs};
+}
+
+function startBatchComparison(){
+  if(UI.batchRunning)return false;
+  const seed=($('seed')&&$('seed').value.trim())||(state&&state.seed)||'origin';
+  UI.batchRunning=true;UI.batchError='';paintComparison();
+  setTimeout(()=>{
+    try{UI.batchComparison=runBatchComparison(seed,BATCH_REPLICATES);}
+    catch(err){UI.batchError=err&&err.message?err.message:String(err);}
+    finally{UI.batchRunning=false;paintComparison();}
+  },20);
+  return true;
+}
+
 function captureComparisonResult(){
   const snap=comparisonSnapshot();if(!snap)return false;
   UI.comparisonRuns[snap.scenario]=snap;paintComparison();return true;
@@ -269,14 +322,28 @@ function runComparisonScenario(scenario){
 }
 
 function paintComparison(){
-  const host=$('comparisonResults'),capture=$('btnCaptureComparison');if(!host)return;
+  const host=$('comparisonResults'),capture=$('btnCaptureComparison'),batchBtn=$('btnBatchComparison');if(!host)return;
   const p=UI.comparisonRuns.plains,o=UI.comparisonRuns.oasis,a=comparisonAssessment(UI.comparisonRuns);
   if(capture)capture.disabled=!state||!['plains','oasis'].includes(state.scenario)||state.tick<COMPARISON_TICK;
+  if(batchBtn){batchBtn.disabled=UI.batchRunning;batchBtn.textContent=UI.batchRunning?'Running 5 pairs…':'Run 5-seed batch';}
   const row=r=>r?`${escHtml(r.seed)} · tick ${r.tick.toLocaleString()} · speed ${fmt(r.speed,2)} · sense ${fmt(r.sense,1)}`:'not captured';
   let verdict=a.message;
   if(a.valid)verdict+=` Plains − Oasis speed ${a.speedDelta>=0?'+':''}${fmt(a.speedDelta,2)}; Oasis − Plains sense ${a.senseDelta>=0?'+':''}${fmt(a.senseDelta,1)}.`;
   const wait=state&&['plains','oasis'].includes(state.scenario)&&state.tick<COMPARISON_TICK?` Capture unlocks at tick ${COMPARISON_TICK.toLocaleString()} (${(COMPARISON_TICK-state.tick).toLocaleString()} remaining).`:'';
-  host.innerHTML=`<p><b>Plains:</b> ${row(p)}</p><p><b>Oasis:</b> ${row(o)}</p><p class="comparisonVerdict">${escHtml(verdict)} One seed is descriptive; repeat across seeds before making a causal claim.${escHtml(wait)}</p>`;
+  let batchHtml='';
+  if(UI.batchRunning)batchHtml='<div class="batchResults"><b>Batch running…</b><p>Five paired seeds, ten temporary worlds. Your live world and RNG will be restored exactly.</p></div>';
+  else if(UI.batchError)batchHtml=`<div class="batchResults"><b>Batch failed</b><p>${escHtml(UI.batchError)}</p></div>`;
+  else if(UI.batchComparison){
+    const b=UI.batchComparison,ba=batchComparisonAssessment(b);
+    const stat=s=>s.n?`${s.mean>=0?'+':''}${fmt(s.mean,2)} ± ${fmt(s.sd,2)} SD; paired dz ${s.dz==null?'—':fmt(s.dz,2)}`:'—';
+    const exceptions=ba.negativeSeeds.length?` Exceptions: ${ba.negativeSeeds.join(', ')}.`:' No directional exceptions.';
+    const missing=ba.missingSeeds.length?` Incomplete/extinct pairs: ${ba.missingSeeds.join(', ')}.`:'';
+    batchHtml=`<div class="batchResults"><b>${ba.n}/${b.seeds.length} complete pairs · ruleset ${escHtml(b.ruleset)} · tick ${b.tick.toLocaleString()}</b>`+
+      `<p>Plains − Oasis speed: ${escHtml(stat(ba.speed))}</p><p>Oasis − Plains sense: ${escHtml(stat(ba.sense))}</p>`+
+      `<p class="comparisonVerdict">${escHtml(ba.message+exceptions+missing)} dz standardizes each paired mean by its between-seed SD. Paired seeds align the starts, but treatment-specific random draws can later diverge; five pairs show repeatability, not an exact counterfactual or universal proof.</p>`+
+      `<p class="seedList"><b>Seeds:</b> ${escHtml(b.seeds.join(', '))}</p></div>`;
+  }
+  host.innerHTML=`<div class="singleComparison"><p><b>Plains:</b> ${row(p)}</p><p><b>Oasis:</b> ${row(o)}</p><p class="comparisonVerdict">${escHtml(verdict)} One seed is descriptive; repeat across seeds before making a causal claim.${escHtml(wait)}</p></div>${batchHtml}`;
 }
 
 /* Drains state.events (populated by detectSpeciation() in sim.js) each paint. The
@@ -669,6 +736,8 @@ function bindUI(){
   if (oasis) oasis.onclick = () => runComparisonScenario('oasis');
   const capture = $('btnCaptureComparison');
   if (capture) capture.onclick = captureComparisonResult;
+  const batch = $('btnBatchComparison');
+  if (batch) batch.onclick = startBatchComparison;
 
   window.addEventListener('resize', () => { fitCanvases(); drawAll(); });
 

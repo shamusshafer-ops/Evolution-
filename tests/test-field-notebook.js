@@ -81,5 +81,50 @@ sampleCensus();
 check('the same extinction is never logged twice',
   state.notebook.filter(e=>e.type==='extinction'&&e.lineageId===oldId).length===1);
 
+const summary=sampleSummary([1,2,3]);
+check('batch summaries report their replicate count and paired mean',summary.n===3&&summary.mean===2);
+check('batch variability uses sample standard deviation',Math.abs(summary.sd-1)<1e-12);
+check('paired dz standardizes the mean by between-seed variation',Math.abs(summary.dz-2)<1e-12);
+check('an empty summary remains explicitly unavailable',sampleSummary([]).mean===null);
+
+const syntheticBatch={pairs:[
+  {plains:{seed:'a',tick:6000,speed:3,sense:20},oasis:{seed:'a',tick:6000,speed:1,sense:23}},
+  {plains:{seed:'b',tick:6000,speed:2,sense:21},oasis:{seed:'b',tick:6000,speed:1,sense:23}},
+  {plains:{seed:'c',tick:6000,speed:1,sense:20},oasis:{seed:'c',tick:6000,speed:1.5,sense:21}},
+]};
+const batchAssessment=batchComparisonAssessment(syntheticBatch);
+check('batch assessment recognizes positive paired mean effects',batchAssessment.valid&&batchAssessment.supports);
+check('batch assessment retains every complete replicate',batchAssessment.n===3);
+check('a contrary pair is reported rather than averaged out',
+  batchAssessment.negativeSeeds.length===1&&batchAssessment.negativeSeeds[0]==='c');
+const incomplete=batchComparisonAssessment({pairs:[{plains:syntheticBatch.pairs[0].plains,oasis:null}]});
+check('incomplete batch pairs are excluded and named',!incomplete.valid&&incomplete.missingSeeds[0]==='a');
+
+initWorld({seed:'live-preservation',scenario:'temperate'});for(let i=0;i<7;i++)step();
+const liveState=state,liveTick=state.tick;
+seedRng('isolated-rng');const isolatedFirst=rnd(),isolatedExpectedSecond=rnd();
+seedRng('isolated-rng');const isolatedActualFirst=rnd();
+const isolated=isolatedScenarioObservation('plains','isolated-observation',30);
+const isolatedActualSecond=rnd();
+check('an isolated observation carries scenario, ruleset, and exact tick metadata',
+  isolated.scenario==='plains'&&isolated.ruleset===VERSION&&isolated.tick===30);
+check('an isolated observation returns finite population trait measurements',
+  isolated.pop>0&&Number.isFinite(isolated.speed)&&Number.isFinite(isolated.sense));
+check('an isolated observation restores the exact live world object and tick',state===liveState&&state.tick===liveTick);
+check('an isolated observation restores both RNG channels exactly',
+  isolatedActualFirst===isolatedFirst&&isolatedActualSecond===isolatedExpectedSecond);
+const isolatedAgain=isolatedScenarioObservation('plains','isolated-observation',30);
+check('isolated observations are deterministic',
+  isolatedAgain.pop===isolated.pop&&isolatedAgain.speed===isolated.speed&&isolatedAgain.sense===isolated.sense);
+
+const actualBatch=runBatchComparison('batch-contract',2),actualAssessment=batchComparisonAssessment(actualBatch);
+check('the batch stores ruleset, observation time, and its exact seed list',
+  actualBatch.ruleset===VERSION&&actualBatch.tick===COMPARISON_TICK&&actualBatch.seeds.length===2);
+check('every batch member is a same-seed same-tick pair',actualBatch.pairs.every(p=>
+  p.plains.seed===p.oasis.seed&&p.plains.tick===COMPARISON_TICK&&p.oasis.tick===COMPARISON_TICK));
+check('actual batch analysis reports all complete pairs without requiring a positive result',
+  actualAssessment.valid&&actualAssessment.n===2&&actualAssessment.speed.n===2&&actualAssessment.sense.n===2);
+check('running the full batch also restores the live world',state===liveState&&state.tick===liveTick);
+
 console.log(`\n${pass}/${pass+fail} checks passed`);
 if(fail)process.exit(1);

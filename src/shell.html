@@ -180,6 +180,10 @@
   }
   #comparisonResults{ margin-top:8px; }
   #comparisonResults p{ margin:3px 0; font-size:10.5px; }
+  .singleComparison{ padding-bottom:7px; }
+  .batchResults{ margin-top:7px; padding:8px; background:var(--well); border:1px solid var(--rule); }
+  .batchResults>b{ color:var(--sense); font-size:10px; }
+  .batchResults .seedList{ overflow-wrap:anywhere; font-size:9px; }
   .compact{ gap:2px 8px; }
   .compact dt, .compact dd{ font-size:10.5px; }
   .inspectHead{ display:flex; align-items:center; gap:7px; margin-bottom:7px; }
@@ -405,6 +409,7 @@
           <button id="btnExperimentPlains" class="chip">Run Plains</button>
           <button id="btnExperimentOasis" class="chip">Run Oasis</button>
           <button id="btnCaptureComparison" class="chip">Capture at 6k</button>
+          <button id="btnBatchComparison" class="chip">Run 5-seed batch</button>
         </div>
         <div id="comparisonResults" aria-live="polite"></div>
       </div>

@@ -4,7 +4,7 @@
    in this file so it can be tuned without reading the simulation.
    ========================================================================== */
 
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 
 /* ---------- Changelog ----------
    Rendered inside the About panel. Newest entry first. This is a standing commitment,
@@ -14,6 +14,8 @@ const VERSION = '0.2.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-08-02', tag:'R0 research', title:'Five paired seeds turn an anecdote into an experiment',
+    text:'The Plains/Oasis Research card can now run five reproducible paired seeds at tick 6,000. It reports the paired mean, sample standard deviation, standardized paired effect (Cohen’s dz), complete seed list, ruleset version, missing or extinct pairs, and every seed that fails either predicted direction. Ten temporary worlds run behind an isolation boundary that restores the player’s exact live world and both RNG channels afterward. Five pairs show repeatability, not universal proof; the interface says so explicitly.' },
   { date:'2026-08-02', tag:'R0', title:'A Field Notebook makes outcomes inspectable',
     text:'Every run now retains an evidence-bearing history of its baseline, planetary events, steward actions, innovations, lineage splits, merges, and extinctions after their toasts disappear. Selecting a living lineage opens a real organism inspector whose energy breakdown is the exact calculation used by selection, alongside pedigree, lifetime feeding, offspring, encounters, adaptations, and traits. A guided same-seed Plains/Oasis card captures matched observations and states clearly when one run supports the prediction without treating one seed as causal proof. Scenario controls are grouped by scientific purpose. This establishes the ecosystem-steward role for a future procedurally generated planet without changing any legacy ecological trajectory or RNG draw.' },
   { date:'2026-08-01', tag:'morphology', title:'Neutral appearance genes drift through every lineage',

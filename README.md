@@ -15,8 +15,10 @@ The **Field Notebook** keeps the run's baseline, environmental events, intervent
 new adaptations, lineage changes, and extinctions instead of letting their evidence
 vanish with a toast. Select a species or specimen to inspect a real organism's energy
 costs and life history. The **Research** card can capture Plains and Oasis at the same
-seed and tick 6,000 for an honest paired observation; it labels that one-seed result as
-suggestive rather than causal proof.
+seed and tick 6,000 for an honest paired observation, or run five paired seeds itself.
+The batch reports mean differences, sample variability, standardized paired effects,
+the full seed list, and contrary or incomplete runs. It restores the live world and RNG
+exactly afterward and never presents five replicates as universal proof.
 
 Drag the specimen well to pan; wheel or pinch to zoom. The overlaid controls provide
 Pause/Run, zoom, view reset, and fullscreen without leaving the well. Arrow keys pan,
