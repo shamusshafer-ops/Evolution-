@@ -85,8 +85,9 @@ check('organismColor does not invent a diet-to-skin-colour relationship',
 const otherClade=makeOrganism(0,0,{speed:1,size:1,sense:30,diet:0.5},1);otherClade.clade=1;
 check('organismColor preserves lineage identity as an analytical accent',organismColor(o0)!==organismColor(otherClade));
 
-const slow=derivePhenotype(makeOrganism(0,0,{speed:0.2,size:1,sense:4,diet:0},1),10);
-const fast=derivePhenotype(makeOrganism(0,0,{speed:6,size:1,sense:4,diet:0},1),10);
+const fixedCos=Object.fromEntries(COSMETIC_GENE_KEYS.map(k=>[k,.5]));
+const slow=derivePhenotype(makeOrganism(0,0,{speed:0.2,size:1,sense:4,diet:0},1,null,fixedCos),10);
+const fast=derivePhenotype(makeOrganism(0,0,{speed:6,size:1,sense:4,diet:0},1,null,fixedCos),10);
 check('speed lengthens homologous limbs',fast.upperLeg>slow.upperLeg&&fast.lowerLeg>slow.lowerLeg);
 check('speed streamlines the torso instead of lengthening the tail',fast.torsoW<slow.torsoW&&fast.tailL===slow.tailL);
 const keen=derivePhenotype(makeOrganism(0,0,{speed:1,size:1,sense:150,diet:0.5},1),10);

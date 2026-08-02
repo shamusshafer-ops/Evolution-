@@ -190,6 +190,13 @@ function organismColor(o){
   return rgbString(mixRgb(neutral,hexToRgb(cladeColor(o.clade || 0)),0.28));
 }
 
+function cosmeticBodyColor(o){
+  const cos=typeof cosmeticGenomeFor==='function'?cosmeticGenomeFor(o):{pigment:.5};
+  const palette=[[82,108,101],[101,121,108],[126,113,92],[113,98,105],[91,109,124],[132,119,83]];
+  const pigment=Math.max(0,Math.min(.999,cos.pigment==null?.5:cos.pigment));
+  return rgbString(mixRgb(palette[Math.floor(pigment*palette.length)],hexToRgb(cladeColor(o.clade||0)),.22));
+}
+
 function derivePhenotype(o, R){
   const speed = traitFraction(o,'speed');
   const sense = traitFraction(o,'sense');
@@ -197,21 +204,33 @@ function derivePhenotype(o, R){
   const wary = traitFraction(o,'wariness');
   const plasticity = traitFraction(o,'plasticity');
   const carnivore = !!(o.ad && o.ad.carnivore);
+  const cos=typeof cosmeticGenomeFor==='function'?cosmeticGenomeFor(o):{};
+  const cv=(key,fallback)=>Math.max(0,Math.min(1,Number.isFinite(cos[key])?cos[key]:fallback));
+  const headProfile=cv('headProfile',.5),muzzleCurve=cv('muzzleCurve',.5);
+  const bodyHeight=cv('bodyHeight',.5),shoulderLine=cv('shoulderLine',.5);
+  const tailProportion=cv('tailLength',.5),tailCurl=cv('tailCurl',.5),tailTaper=cv('tailTaper',.5);
+  const covering=cv('covering',.5);
   return {
-    R, speed, sense, diet, wary, plasticity,
-    torsoL:R*(1.16 - speed*0.10),
-    torsoW:R*(0.96 - speed*0.18),
+    R, speed, sense, diet, wary, plasticity,cosmetics:cos,
+    headProfile,muzzleCurve,bodyHeight,shoulderLine,tailProportion,tailCurl,tailTaper,
+    earSize:cv('earSize',.5),horns:cv('horns',.42),covering,
+    coveringIndex:Math.min(3,Math.floor(covering*4)),coatLength:cv('coatLength',.48),
+    pattern:cv('pattern',.5),
+    torsoL:R*(1.16 - speed*0.10)*(0.94+shoulderLine*.12),
+    torsoW:R*(0.96 - speed*0.18)*(0.92+shoulderLine*.16),
     neckL:R*(0.24 + wary*0.24),
     neckW:R*(0.34 + (1-speed)*0.10),
-    headL:R*(0.52 + (1-diet)*0.18 + (carnivore?0.12:0)),
-    headW:R*(0.50 + diet*0.32 + (carnivore?0.14:0)),
-    snoutL:R*((0.52 - diet*0.28) + (carnivore?0.10:0)),
+    headL:R*(0.52 + (1-diet)*0.18 + (carnivore?0.12:0))*(0.86+headProfile*.28),
+    headW:R*(0.50 + diet*0.32 + (carnivore?0.14:0))*(1.13-headProfile*.23),
+    snoutL:R*((0.52 - diet*0.28) + (carnivore?0.10:0))*(0.86+muzzleCurve*.28),
     eyeR:Math.max(0.34,R*(0.045 + sense*0.135)),
     upperLeg:R*(0.48 + speed*0.48),
     lowerLeg:R*(0.38 + speed*0.58),
     footL:R*(0.20 + speed*0.22),
-    tailL:R*(1.12 + (1-diet)*0.10),
-    baseColor:organismColor(o),
+    tailL:R*(1.12 + (1-diet)*0.10)*(0.72+tailProportion*.58),
+    tailCurve:(tailCurl-.5)*R*1.25,
+    tailTip:R*(.025+(1-tailTaper)*.075),
+    baseColor:cosmeticBodyColor(o),
     accent:cladeColor(o.clade || 0),
   };
 }
@@ -307,9 +326,10 @@ function drawCreature(ctx,o,R,opts){
   // hairless cord. Its length is deliberately not a speed gauge.
   ctx.fillStyle=shadeColor(p.baseColor,-0.12);
   ctx.beginPath();
+  const tailTipX=-p.torsoL-p.tailL,tailTipY=p.tailCurve;
   ctx.moveTo(-p.torsoL*0.76,-p.R*0.30);
-  ctx.quadraticCurveTo(-p.torsoL-p.tailL*0.45,-p.R*0.22,-p.torsoL-p.tailL,0);
-  ctx.quadraticCurveTo(-p.torsoL-p.tailL*0.42,p.R*0.18,-p.torsoL*0.76,p.R*0.30);
+  ctx.quadraticCurveTo(-p.torsoL-p.tailL*0.48,-p.R*0.22+p.tailCurve*.42,tailTipX,tailTipY-p.tailTip);
+  ctx.quadraticCurveTo(-p.torsoL-p.tailL*0.45,p.R*0.18+p.tailCurve*.42,-p.torsoL*0.76,p.R*0.30);
   ctx.closePath();ctx.fill();
 
   // Far limbs, then torso, then near limb highlights create readable joint depth.
@@ -350,6 +370,19 @@ function drawCreature(ctx,o,R,opts){
   ctx.beginPath();ctx.ellipse(headX,0,p.headL,p.headW,0,0,Math.PI*2);ctx.fill();
   ctx.strokeStyle=shadeColor(p.accent,-0.20);ctx.lineWidth=Math.max(0.5,p.R*0.065);ctx.stroke();
 
+  if(lod!=='low'){
+    const earL=p.R*(.10+p.earSize*.32),earW=p.R*(.06+p.earSize*.13);
+    ctx.fillStyle=shadeColor(p.baseColor,.12);
+    for(const side of [-1,1]){
+      ctx.beginPath();ctx.moveTo(headX-p.headL*.20,side*p.headW*.56);
+      ctx.quadraticCurveTo(headX-p.headL*.28,side*(p.headW+earL),headX+p.headL*.02,side*(p.headW*.62+earW));ctx.closePath();ctx.fill();
+    }
+    const hornL=Math.max(0,(p.horns-.58)/.42)*p.R*.72;
+    if(hornL>.04){ctx.strokeStyle=shadeColor(p.baseColor,-.42);ctx.lineWidth=Math.max(.7,p.R*.085);ctx.lineCap='round';
+      for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(headX-p.headL*.10,side*p.headW*.45);ctx.quadraticCurveTo(headX-p.headL*.28,side*(p.headW+hornL*.48),headX+p.headL*.02,side*(p.headW+hornL));ctx.stroke();}
+    }
+  }
+
   // Feeding apparatus: diet 0 is a long narrow soft-food probe/cropper; diet 1 is a
   // short broad woody-food crushing/chiselling face. Carnivory deepens the whole jaw.
   const mouthX=headX+p.headL*0.58;
@@ -370,6 +403,34 @@ function drawCreature(ctx,o,R,opts){
   }
 
   if(lod!=='low'){
+    const patternStrength=Math.abs(p.pattern-.5)*2;
+    if(patternStrength>.14){
+      ctx.fillStyle=shadeColor(p.accent,-.34);ctx.globalAlpha=.28+.32*patternStrength;
+      for(const q of [[-.55,-.25,.16,.12],[-.18,.30,.20,.11],[.18,-.28,.17,.12],[.48,.22,.15,.10]]){
+        ctx.beginPath();ctx.ellipse(p.torsoL*q[0],p.torsoW*q[1],p.torsoL*q[2]*patternStrength,p.torsoW*q[3],q[1],0,Math.PI*2);ctx.fill();
+      }ctx.globalAlpha=1;
+    }
+    if(p.coveringIndex===1){
+      ctx.strokeStyle=shadeColor(p.baseColor,-.28);ctx.lineWidth=Math.max(.3,p.R*.024);ctx.globalAlpha=.66;
+      for(let x=-4;x<=4;x++)for(let y=-2;y<=2;y++){
+        const nx=x/5,ny=y/3;if(nx*nx+ny*ny>.82)continue;
+        ctx.beginPath();ctx.arc(nx*p.torsoL*.82,ny*p.torsoW*.72,p.R*.085,0,Math.PI);ctx.stroke();
+      }ctx.globalAlpha=1;
+    }else if(p.coveringIndex===2){
+      ctx.strokeStyle=shadeColor(p.baseColor,.24);ctx.lineWidth=Math.max(.35,p.R*.026);ctx.globalAlpha=.78;
+      const len=p.R*(.08+p.coatLength*.13);
+      for(let x=-5;x<=5;x++)for(let y=-2;y<=2;y++){
+        const nx=x/6,ny=y/3;if(nx*nx+ny*ny>.86)continue;
+        const px=nx*p.torsoL*.82,py=ny*p.torsoW*.74;ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px-len,py+ny*len*.45);ctx.stroke();
+      }ctx.globalAlpha=1;
+    }else if(p.coveringIndex===3){
+      ctx.fillStyle=shadeColor(p.baseColor,.20);ctx.globalAlpha=.80;
+      for(let x=-4;x<=4;x++)for(let y=-2;y<=2;y++){
+        const nx=x/5,ny=y/3;if(nx*nx+ny*ny>.82)continue;
+        const px=nx*p.torsoL*.80,py=ny*p.torsoW*.72;
+        ctx.beginPath();ctx.ellipse(px,py,p.R*(.10+p.coatLength*.08),p.R*.045,nx*.3,0,Math.PI*2);ctx.fill();
+      }ctx.globalAlpha=1;
+    }
     // Camouflage is a low-contrast disruptive surface pattern, never active colour change.
     if(ad.camouflage){
       ctx.fillStyle=shadeColor(ADAPT_BY_KEY.camouflage.color,-0.32);ctx.globalAlpha=0.62;
@@ -656,6 +717,10 @@ function morphologyDistance(a,b){
   for(const key of PHYSICAL_ADAPTATIONS){
     if(!!(a.ad&&a.ad[key])!==!!(b.ad&&b.ad[key])) sum+=0.10;
     axes++;
+  }
+  if(typeof COSMETIC_GENE_KEYS!=='undefined'){
+    const ac=cosmeticGenomeFor(a),bc=cosmeticGenomeFor(b);
+    for(const key of COSMETIC_GENE_KEYS){const d=ac[key]-bc[key];sum+=d*d*.72;axes+=.72;}
   }
   return Math.sqrt(sum/Math.max(1,axes));
 }

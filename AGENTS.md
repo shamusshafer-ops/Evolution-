@@ -28,7 +28,7 @@ cat tests/harness.js build/evo.js tests/test-NAME.js | node
 
 There is no `npm test` — the suite is 17 files, run one at a time. `tests/harness.js`
 provides the browser-free globals (`document`, `window`, etc.) that let `sim.js` run
-headless. Current files (471 checks total as of this handoff): `test-core.js`,
+headless. Current files (482 checks total as of this handoff): `test-core.js`,
 `test-niche.js`, `test-render.js`, `test-selection.js`, `test-speciation.js`,
 `test-ui.js`, `test-environment.js`, `test-predation.js`, `test-adaptations.js`,
 `test-lineage.js`, `test-learning.js`, `test-carnivory.js`,
@@ -156,6 +156,12 @@ touching a threshold, and say so in the commit message the way past commits have
   and camera. Three.js is pinned and inlined at build time, so `index.html` stays
   offline/self-contained. `?renderer=2d` selects the retained Canvas fallback. Never
   let rendering consume `rnd()` or write to `state`; `test-three-render.js` guards it.
+- **Neutral cosmetic genetics are shipped.** Every organism owns `cos`, a 13-locus
+  appearance genome inherited through `inheritCosmeticGenome()`. Its hash-derived
+  parent choice and mutation channel must never call `rnd()`: cosmetics may alter
+  representative selection and rendering, but never metabolism, mating, or species
+  derivation. Smooth card tubes own their generated geometry and must retain the
+  `ownedGeometry` disposal marker.
 
 **Next product decision:** owner-ranked #32 (eras / genuine unlock thresholds) is the
 next large game-mode slice. Follow-a-lineage (#33) and timeline compression (#34) are

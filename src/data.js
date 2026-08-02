@@ -14,6 +14,8 @@ const VERSION = '0.1.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-08-01', tag:'morphology', title:'Neutral appearance genes drift through every lineage',
+    text:'Every organism now carries a separate heritable cosmetic genome. Head profile, muzzle shape, shoulder line, standing height, ear size, tail length, curl and taper, pigment, pattern, horns, and integument recombine from the parents and undergo small seeded mutations without consuming the simulation RNG or changing fitness. The integument locus can produce smooth skin, scales, fur, or feather-like keratin, while ornament genes can produce horns and tail display. Specimen variants are selected across ecological and cosmetic morphology so within-species drift stays visible. Organic tapered meshes and buried junctions replace abrupt cylinder-to-ellipsoid joins, especially from pelvis into tail.' },
   { date:'2026-08-01', tag:'3D', title:'One living phenotype across every view',
     text:'Species cards, the live world, and fullscreen now render the same procedural three-dimensional organism. A shared articulated terrestrial body maps inherited size, speed, sense, diet, wariness, and physical adaptations onto homologous anatomy; behavioural genes remain external cues. Cards show the real representative and two selectable real variants as interactive turntables. The world uses instanced anatomical parts for the full population, preserving seeded simulation state while adding gait, depth, terrain, food, and an oblique camera. Fullscreen reuses that exact scene and camera. Three.js is pinned and bundled into the self-contained offline page; ?renderer=2d retains the prior scientific fallback.' },
   { date:'2026-08-01', tag:'morphology', title:'Species have a shared, detailed evolving anatomy',
@@ -147,6 +149,31 @@ const TRAITS = [
     blurb:'How fast an organism LEARNS to escape from surviving near-misses. Costs more neural upkeep than wariness, and buys nothing at birth — you must live long enough to use it.' },
 ];
 const TRAIT_KEYS = TRAITS.map(t => t.key);
+
+/* ---------- Neutral appearance genome ----------
+   These loci are deliberately NOT TRAITS and never enter metabolism, mating, or
+   species derivation. They model neutral, heritable variation: recombination and
+   mutation can make one lineage visually recognisable without pretending that a
+   horn, coat, or colour is automatically adaptive. A separate hash-derived channel
+   in sim.js keeps this diversity reproducible without consuming rnd() and shifting
+   any of the measured ecological trajectories. */
+const COSMETIC_GENES = [
+  { key:'headProfile',  label:'Head profile',     init:0.50, founderSpread:0.27, sigma:0.065 },
+  { key:'muzzleCurve',  label:'Muzzle profile',   init:0.50, founderSpread:0.25, sigma:0.060 },
+  { key:'bodyHeight',   label:'Standing height',  init:0.50, founderSpread:0.24, sigma:0.055 },
+  { key:'shoulderLine', label:'Shoulder line',    init:0.50, founderSpread:0.25, sigma:0.060 },
+  { key:'tailLength',   label:'Tail proportion',  init:0.50, founderSpread:0.28, sigma:0.070 },
+  { key:'tailCurl',     label:'Tail curvature',   init:0.50, founderSpread:0.32, sigma:0.075 },
+  { key:'tailTaper',    label:'Tail taper',       init:0.50, founderSpread:0.27, sigma:0.065 },
+  { key:'earSize',      label:'External ears',    init:0.50, founderSpread:0.30, sigma:0.070 },
+  { key:'horns',        label:'Head ornament',    init:0.42, founderSpread:0.30, sigma:0.075 },
+  { key:'covering',     label:'Integument type',  init:0.50, founderSpread:0.42, sigma:0.080 },
+  { key:'coatLength',   label:'Covering length',  init:0.48, founderSpread:0.31, sigma:0.075 },
+  { key:'pattern',      label:'Surface pattern',  init:0.50, founderSpread:0.34, sigma:0.080 },
+  { key:'pigment',      label:'Neutral pigment',  init:0.50, founderSpread:0.36, sigma:0.075 },
+];
+const COSMETIC_GENE_KEYS = COSMETIC_GENES.map(g => g.key);
+const COSMETIC_MUTATE_CHANCE = 0.12;
 
 /* Mate choice is assortative on ECOLOGICAL similarity — what you eat, where and how
    you forage — not on cognition. Two organisms differing only in learning speed are

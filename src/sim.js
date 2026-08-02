@@ -85,6 +85,52 @@ function makeState(opts){
 function clamp(v, lo, hi){ return v < lo ? lo : (v > hi ? hi : v); }
 function traitDef(key){ return TRAITS.find(t => t.key === key); }
 
+/* Neutral appearance uses a separate deterministic channel. It looks random for a
+   seed, recombines, and mutates, but never advances rnd(); adding visible diversity
+   therefore cannot rewrite the simulator's established ecological results. */
+function cosmeticHashUnit(){
+  const parts=Array.from(arguments).map(String).join('|');
+  return hashStr('appearance|'+parts) / 4294967296;
+}
+function cosmeticHashNormal(){
+  const args=Array.from(arguments);
+  const u=Math.max(1e-12,cosmeticHashUnit.apply(null,args.concat('u')));
+  const v=cosmeticHashUnit.apply(null,args.concat('v'));
+  return Math.sqrt(-2*Math.log(u))*Math.cos(Math.PI*2*v);
+}
+function cosmeticFounderGenome(seed,id){
+  const genome={};
+  for(const def of COSMETIC_GENES){
+    genome[def.key]=clamp(def.init+cosmeticHashNormal(seed,id,def.key)*def.founderSpread,0,1);
+  }
+  return genome;
+}
+function inheritCosmeticGenome(a,b,childId,seed){
+  const genome={};
+  const fallbackA=cosmeticFounderGenome(seed,a&&a.id!=null?a.id:'a');
+  const fallbackB=cosmeticFounderGenome(seed,b&&b.id!=null?b.id:'b');
+  for(const def of COSMETIC_GENES){
+    const av=a&&a.cos&&Number.isFinite(a.cos[def.key])?a.cos[def.key]:fallbackA[def.key];
+    const bv=b&&b.cos&&Number.isFinite(b.cos[def.key])?b.cos[def.key]:fallbackB[def.key];
+    let value=cosmeticHashUnit(seed,childId,def.key,'parent')<.5?av:bv;
+    if(cosmeticHashUnit(seed,childId,def.key,'mutation')<COSMETIC_MUTATE_CHANCE){
+      value+=cosmeticHashNormal(seed,childId,def.key,'effect')*def.sigma;
+    }
+    genome[def.key]=clamp(value,0,1);
+  }
+  return genome;
+}
+function cosmeticGenomeFor(o){
+  const seed=state&&state.seed!=null?state.seed:'origin';
+  const fallback=cosmeticFounderGenome(seed,o&&o.id!=null?o.id:0);
+  const genome={};
+  for(const def of COSMETIC_GENES){
+    const value=o&&o.cos?Number(o.cos[def.key]):NaN;
+    genome[def.key]=Number.isFinite(value)?clamp(value,0,1):fallback[def.key];
+  }
+  return genome;
+}
+
 /* mass ∝ size³ — volume scaling. Used by every cost term. */
 function massOf(o){ return METAB.massCoef * o.size * o.size * o.size; }
 
@@ -175,14 +221,18 @@ function dietEfficiency(o, type){
   return Math.max(DIET.floor, eff);
 }
 
-function makeOrganism(x, y, traits, gen, adapt){
+function makeOrganism(x, y, traits, gen, adapt, cosmetic){
+  const id=state.nextId++;
   const o = {
-    id: state.nextId++,
+    id,
     clade: 0,
     predCooldown: 0,
     learned: 0,          // within-lifetime escape skill; NOT inherited (that is the point)
     escapes: 0,          // near-misses survived, for inspection
     ad: {},              // discrete adaptation genes; see ADAPTATIONS in data.js
+    cos: cosmetic ? Object.fromEntries(COSMETIC_GENES.map(def=>[
+      def.key,clamp(Number.isFinite(Number(cosmetic[def.key]))?Number(cosmetic[def.key]):def.init,0,1)
+    ])) : cosmeticFounderGenome(state.seed,id),
     parents: [],         // recent pedigree, used for actual kin recognition
     grandparents: [],
     shareCooldown: 0,
@@ -478,7 +528,8 @@ function reproduceSexual(a, b){
     }
     state.stats.careEnergy=(state.stats.careEnergy||0)+careEnergy;
   }
-  const child = makeOrganism(a.x, a.y, childTraits, Math.max(a.gen, b.gen) + 1, childAdapt);
+  const childCosmetic=inheritCosmeticGenome(a,b,state.nextId,state.seed);
+  const child = makeOrganism(a.x, a.y, childTraits, Math.max(a.gen, b.gen) + 1, childAdapt, childCosmetic);
   child.parents=[a.id,b.id];
   child.grandparents=[...(new Set([...(a.parents||[]),...(b.parents||[])]))].slice(0,4);
   child.energy = giveA + giveB + careEnergy;

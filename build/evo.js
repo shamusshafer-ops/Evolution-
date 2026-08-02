@@ -15,6 +15,8 @@ const VERSION = '0.1.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-08-01', tag:'morphology', title:'Neutral appearance genes drift through every lineage',
+    text:'Every organism now carries a separate heritable cosmetic genome. Head profile, muzzle shape, shoulder line, standing height, ear size, tail length, curl and taper, pigment, pattern, horns, and integument recombine from the parents and undergo small seeded mutations without consuming the simulation RNG or changing fitness. The integument locus can produce smooth skin, scales, fur, or feather-like keratin, while ornament genes can produce horns and tail display. Specimen variants are selected across ecological and cosmetic morphology so within-species drift stays visible. Organic tapered meshes and buried junctions replace abrupt cylinder-to-ellipsoid joins, especially from pelvis into tail.' },
   { date:'2026-08-01', tag:'3D', title:'One living phenotype across every view',
     text:'Species cards, the live world, and fullscreen now render the same procedural three-dimensional organism. A shared articulated terrestrial body maps inherited size, speed, sense, diet, wariness, and physical adaptations onto homologous anatomy; behavioural genes remain external cues. Cards show the real representative and two selectable real variants as interactive turntables. The world uses instanced anatomical parts for the full population, preserving seeded simulation state while adding gait, depth, terrain, food, and an oblique camera. Fullscreen reuses that exact scene and camera. Three.js is pinned and bundled into the self-contained offline page; ?renderer=2d retains the prior scientific fallback.' },
   { date:'2026-08-01', tag:'morphology', title:'Species have a shared, detailed evolving anatomy',
@@ -148,6 +150,31 @@ const TRAITS = [
     blurb:'How fast an organism LEARNS to escape from surviving near-misses. Costs more neural upkeep than wariness, and buys nothing at birth — you must live long enough to use it.' },
 ];
 const TRAIT_KEYS = TRAITS.map(t => t.key);
+
+/* ---------- Neutral appearance genome ----------
+   These loci are deliberately NOT TRAITS and never enter metabolism, mating, or
+   species derivation. They model neutral, heritable variation: recombination and
+   mutation can make one lineage visually recognisable without pretending that a
+   horn, coat, or colour is automatically adaptive. A separate hash-derived channel
+   in sim.js keeps this diversity reproducible without consuming rnd() and shifting
+   any of the measured ecological trajectories. */
+const COSMETIC_GENES = [
+  { key:'headProfile',  label:'Head profile',     init:0.50, founderSpread:0.27, sigma:0.065 },
+  { key:'muzzleCurve',  label:'Muzzle profile',   init:0.50, founderSpread:0.25, sigma:0.060 },
+  { key:'bodyHeight',   label:'Standing height',  init:0.50, founderSpread:0.24, sigma:0.055 },
+  { key:'shoulderLine', label:'Shoulder line',    init:0.50, founderSpread:0.25, sigma:0.060 },
+  { key:'tailLength',   label:'Tail proportion',  init:0.50, founderSpread:0.28, sigma:0.070 },
+  { key:'tailCurl',     label:'Tail curvature',   init:0.50, founderSpread:0.32, sigma:0.075 },
+  { key:'tailTaper',    label:'Tail taper',       init:0.50, founderSpread:0.27, sigma:0.065 },
+  { key:'earSize',      label:'External ears',    init:0.50, founderSpread:0.30, sigma:0.070 },
+  { key:'horns',        label:'Head ornament',    init:0.42, founderSpread:0.30, sigma:0.075 },
+  { key:'covering',     label:'Integument type',  init:0.50, founderSpread:0.42, sigma:0.080 },
+  { key:'coatLength',   label:'Covering length',  init:0.48, founderSpread:0.31, sigma:0.075 },
+  { key:'pattern',      label:'Surface pattern',  init:0.50, founderSpread:0.34, sigma:0.080 },
+  { key:'pigment',      label:'Neutral pigment',  init:0.50, founderSpread:0.36, sigma:0.075 },
+];
+const COSMETIC_GENE_KEYS = COSMETIC_GENES.map(g => g.key);
+const COSMETIC_MUTATE_CHANCE = 0.12;
 
 /* Mate choice is assortative on ECOLOGICAL similarity — what you eat, where and how
    you forage — not on cognition. Two organisms differing only in learning speed are
@@ -844,6 +871,52 @@ function makeState(opts){
 function clamp(v, lo, hi){ return v < lo ? lo : (v > hi ? hi : v); }
 function traitDef(key){ return TRAITS.find(t => t.key === key); }
 
+/* Neutral appearance uses a separate deterministic channel. It looks random for a
+   seed, recombines, and mutates, but never advances rnd(); adding visible diversity
+   therefore cannot rewrite the simulator's established ecological results. */
+function cosmeticHashUnit(){
+  const parts=Array.from(arguments).map(String).join('|');
+  return hashStr('appearance|'+parts) / 4294967296;
+}
+function cosmeticHashNormal(){
+  const args=Array.from(arguments);
+  const u=Math.max(1e-12,cosmeticHashUnit.apply(null,args.concat('u')));
+  const v=cosmeticHashUnit.apply(null,args.concat('v'));
+  return Math.sqrt(-2*Math.log(u))*Math.cos(Math.PI*2*v);
+}
+function cosmeticFounderGenome(seed,id){
+  const genome={};
+  for(const def of COSMETIC_GENES){
+    genome[def.key]=clamp(def.init+cosmeticHashNormal(seed,id,def.key)*def.founderSpread,0,1);
+  }
+  return genome;
+}
+function inheritCosmeticGenome(a,b,childId,seed){
+  const genome={};
+  const fallbackA=cosmeticFounderGenome(seed,a&&a.id!=null?a.id:'a');
+  const fallbackB=cosmeticFounderGenome(seed,b&&b.id!=null?b.id:'b');
+  for(const def of COSMETIC_GENES){
+    const av=a&&a.cos&&Number.isFinite(a.cos[def.key])?a.cos[def.key]:fallbackA[def.key];
+    const bv=b&&b.cos&&Number.isFinite(b.cos[def.key])?b.cos[def.key]:fallbackB[def.key];
+    let value=cosmeticHashUnit(seed,childId,def.key,'parent')<.5?av:bv;
+    if(cosmeticHashUnit(seed,childId,def.key,'mutation')<COSMETIC_MUTATE_CHANCE){
+      value+=cosmeticHashNormal(seed,childId,def.key,'effect')*def.sigma;
+    }
+    genome[def.key]=clamp(value,0,1);
+  }
+  return genome;
+}
+function cosmeticGenomeFor(o){
+  const seed=state&&state.seed!=null?state.seed:'origin';
+  const fallback=cosmeticFounderGenome(seed,o&&o.id!=null?o.id:0);
+  const genome={};
+  for(const def of COSMETIC_GENES){
+    const value=o&&o.cos?Number(o.cos[def.key]):NaN;
+    genome[def.key]=Number.isFinite(value)?clamp(value,0,1):fallback[def.key];
+  }
+  return genome;
+}
+
 /* mass ∝ size³ — volume scaling. Used by every cost term. */
 function massOf(o){ return METAB.massCoef * o.size * o.size * o.size; }
 
@@ -934,14 +1007,18 @@ function dietEfficiency(o, type){
   return Math.max(DIET.floor, eff);
 }
 
-function makeOrganism(x, y, traits, gen, adapt){
+function makeOrganism(x, y, traits, gen, adapt, cosmetic){
+  const id=state.nextId++;
   const o = {
-    id: state.nextId++,
+    id,
     clade: 0,
     predCooldown: 0,
     learned: 0,          // within-lifetime escape skill; NOT inherited (that is the point)
     escapes: 0,          // near-misses survived, for inspection
     ad: {},              // discrete adaptation genes; see ADAPTATIONS in data.js
+    cos: cosmetic ? Object.fromEntries(COSMETIC_GENES.map(def=>[
+      def.key,clamp(Number.isFinite(Number(cosmetic[def.key]))?Number(cosmetic[def.key]):def.init,0,1)
+    ])) : cosmeticFounderGenome(state.seed,id),
     parents: [],         // recent pedigree, used for actual kin recognition
     grandparents: [],
     shareCooldown: 0,
@@ -1237,7 +1314,8 @@ function reproduceSexual(a, b){
     }
     state.stats.careEnergy=(state.stats.careEnergy||0)+careEnergy;
   }
-  const child = makeOrganism(a.x, a.y, childTraits, Math.max(a.gen, b.gen) + 1, childAdapt);
+  const childCosmetic=inheritCosmeticGenome(a,b,state.nextId,state.seed);
+  const child = makeOrganism(a.x, a.y, childTraits, Math.max(a.gen, b.gen) + 1, childAdapt, childCosmetic);
   child.parents=[a.id,b.id];
   child.grandparents=[...(new Set([...(a.parents||[]),...(b.parents||[])]))].slice(0,4);
   child.energy = giveA + giveB + careEnergy;
@@ -2384,6 +2462,13 @@ function organismColor(o){
   return rgbString(mixRgb(neutral,hexToRgb(cladeColor(o.clade || 0)),0.28));
 }
 
+function cosmeticBodyColor(o){
+  const cos=typeof cosmeticGenomeFor==='function'?cosmeticGenomeFor(o):{pigment:.5};
+  const palette=[[82,108,101],[101,121,108],[126,113,92],[113,98,105],[91,109,124],[132,119,83]];
+  const pigment=Math.max(0,Math.min(.999,cos.pigment==null?.5:cos.pigment));
+  return rgbString(mixRgb(palette[Math.floor(pigment*palette.length)],hexToRgb(cladeColor(o.clade||0)),.22));
+}
+
 function derivePhenotype(o, R){
   const speed = traitFraction(o,'speed');
   const sense = traitFraction(o,'sense');
@@ -2391,21 +2476,33 @@ function derivePhenotype(o, R){
   const wary = traitFraction(o,'wariness');
   const plasticity = traitFraction(o,'plasticity');
   const carnivore = !!(o.ad && o.ad.carnivore);
+  const cos=typeof cosmeticGenomeFor==='function'?cosmeticGenomeFor(o):{};
+  const cv=(key,fallback)=>Math.max(0,Math.min(1,Number.isFinite(cos[key])?cos[key]:fallback));
+  const headProfile=cv('headProfile',.5),muzzleCurve=cv('muzzleCurve',.5);
+  const bodyHeight=cv('bodyHeight',.5),shoulderLine=cv('shoulderLine',.5);
+  const tailProportion=cv('tailLength',.5),tailCurl=cv('tailCurl',.5),tailTaper=cv('tailTaper',.5);
+  const covering=cv('covering',.5);
   return {
-    R, speed, sense, diet, wary, plasticity,
-    torsoL:R*(1.16 - speed*0.10),
-    torsoW:R*(0.96 - speed*0.18),
+    R, speed, sense, diet, wary, plasticity,cosmetics:cos,
+    headProfile,muzzleCurve,bodyHeight,shoulderLine,tailProportion,tailCurl,tailTaper,
+    earSize:cv('earSize',.5),horns:cv('horns',.42),covering,
+    coveringIndex:Math.min(3,Math.floor(covering*4)),coatLength:cv('coatLength',.48),
+    pattern:cv('pattern',.5),
+    torsoL:R*(1.16 - speed*0.10)*(0.94+shoulderLine*.12),
+    torsoW:R*(0.96 - speed*0.18)*(0.92+shoulderLine*.16),
     neckL:R*(0.24 + wary*0.24),
     neckW:R*(0.34 + (1-speed)*0.10),
-    headL:R*(0.52 + (1-diet)*0.18 + (carnivore?0.12:0)),
-    headW:R*(0.50 + diet*0.32 + (carnivore?0.14:0)),
-    snoutL:R*((0.52 - diet*0.28) + (carnivore?0.10:0)),
+    headL:R*(0.52 + (1-diet)*0.18 + (carnivore?0.12:0))*(0.86+headProfile*.28),
+    headW:R*(0.50 + diet*0.32 + (carnivore?0.14:0))*(1.13-headProfile*.23),
+    snoutL:R*((0.52 - diet*0.28) + (carnivore?0.10:0))*(0.86+muzzleCurve*.28),
     eyeR:Math.max(0.34,R*(0.045 + sense*0.135)),
     upperLeg:R*(0.48 + speed*0.48),
     lowerLeg:R*(0.38 + speed*0.58),
     footL:R*(0.20 + speed*0.22),
-    tailL:R*(1.12 + (1-diet)*0.10),
-    baseColor:organismColor(o),
+    tailL:R*(1.12 + (1-diet)*0.10)*(0.72+tailProportion*.58),
+    tailCurve:(tailCurl-.5)*R*1.25,
+    tailTip:R*(.025+(1-tailTaper)*.075),
+    baseColor:cosmeticBodyColor(o),
     accent:cladeColor(o.clade || 0),
   };
 }
@@ -2501,9 +2598,10 @@ function drawCreature(ctx,o,R,opts){
   // hairless cord. Its length is deliberately not a speed gauge.
   ctx.fillStyle=shadeColor(p.baseColor,-0.12);
   ctx.beginPath();
+  const tailTipX=-p.torsoL-p.tailL,tailTipY=p.tailCurve;
   ctx.moveTo(-p.torsoL*0.76,-p.R*0.30);
-  ctx.quadraticCurveTo(-p.torsoL-p.tailL*0.45,-p.R*0.22,-p.torsoL-p.tailL,0);
-  ctx.quadraticCurveTo(-p.torsoL-p.tailL*0.42,p.R*0.18,-p.torsoL*0.76,p.R*0.30);
+  ctx.quadraticCurveTo(-p.torsoL-p.tailL*0.48,-p.R*0.22+p.tailCurve*.42,tailTipX,tailTipY-p.tailTip);
+  ctx.quadraticCurveTo(-p.torsoL-p.tailL*0.45,p.R*0.18+p.tailCurve*.42,-p.torsoL*0.76,p.R*0.30);
   ctx.closePath();ctx.fill();
 
   // Far limbs, then torso, then near limb highlights create readable joint depth.
@@ -2544,6 +2642,19 @@ function drawCreature(ctx,o,R,opts){
   ctx.beginPath();ctx.ellipse(headX,0,p.headL,p.headW,0,0,Math.PI*2);ctx.fill();
   ctx.strokeStyle=shadeColor(p.accent,-0.20);ctx.lineWidth=Math.max(0.5,p.R*0.065);ctx.stroke();
 
+  if(lod!=='low'){
+    const earL=p.R*(.10+p.earSize*.32),earW=p.R*(.06+p.earSize*.13);
+    ctx.fillStyle=shadeColor(p.baseColor,.12);
+    for(const side of [-1,1]){
+      ctx.beginPath();ctx.moveTo(headX-p.headL*.20,side*p.headW*.56);
+      ctx.quadraticCurveTo(headX-p.headL*.28,side*(p.headW+earL),headX+p.headL*.02,side*(p.headW*.62+earW));ctx.closePath();ctx.fill();
+    }
+    const hornL=Math.max(0,(p.horns-.58)/.42)*p.R*.72;
+    if(hornL>.04){ctx.strokeStyle=shadeColor(p.baseColor,-.42);ctx.lineWidth=Math.max(.7,p.R*.085);ctx.lineCap='round';
+      for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(headX-p.headL*.10,side*p.headW*.45);ctx.quadraticCurveTo(headX-p.headL*.28,side*(p.headW+hornL*.48),headX+p.headL*.02,side*(p.headW+hornL));ctx.stroke();}
+    }
+  }
+
   // Feeding apparatus: diet 0 is a long narrow soft-food probe/cropper; diet 1 is a
   // short broad woody-food crushing/chiselling face. Carnivory deepens the whole jaw.
   const mouthX=headX+p.headL*0.58;
@@ -2564,6 +2675,34 @@ function drawCreature(ctx,o,R,opts){
   }
 
   if(lod!=='low'){
+    const patternStrength=Math.abs(p.pattern-.5)*2;
+    if(patternStrength>.14){
+      ctx.fillStyle=shadeColor(p.accent,-.34);ctx.globalAlpha=.28+.32*patternStrength;
+      for(const q of [[-.55,-.25,.16,.12],[-.18,.30,.20,.11],[.18,-.28,.17,.12],[.48,.22,.15,.10]]){
+        ctx.beginPath();ctx.ellipse(p.torsoL*q[0],p.torsoW*q[1],p.torsoL*q[2]*patternStrength,p.torsoW*q[3],q[1],0,Math.PI*2);ctx.fill();
+      }ctx.globalAlpha=1;
+    }
+    if(p.coveringIndex===1){
+      ctx.strokeStyle=shadeColor(p.baseColor,-.28);ctx.lineWidth=Math.max(.3,p.R*.024);ctx.globalAlpha=.66;
+      for(let x=-4;x<=4;x++)for(let y=-2;y<=2;y++){
+        const nx=x/5,ny=y/3;if(nx*nx+ny*ny>.82)continue;
+        ctx.beginPath();ctx.arc(nx*p.torsoL*.82,ny*p.torsoW*.72,p.R*.085,0,Math.PI);ctx.stroke();
+      }ctx.globalAlpha=1;
+    }else if(p.coveringIndex===2){
+      ctx.strokeStyle=shadeColor(p.baseColor,.24);ctx.lineWidth=Math.max(.35,p.R*.026);ctx.globalAlpha=.78;
+      const len=p.R*(.08+p.coatLength*.13);
+      for(let x=-5;x<=5;x++)for(let y=-2;y<=2;y++){
+        const nx=x/6,ny=y/3;if(nx*nx+ny*ny>.86)continue;
+        const px=nx*p.torsoL*.82,py=ny*p.torsoW*.74;ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px-len,py+ny*len*.45);ctx.stroke();
+      }ctx.globalAlpha=1;
+    }else if(p.coveringIndex===3){
+      ctx.fillStyle=shadeColor(p.baseColor,.20);ctx.globalAlpha=.80;
+      for(let x=-4;x<=4;x++)for(let y=-2;y<=2;y++){
+        const nx=x/5,ny=y/3;if(nx*nx+ny*ny>.82)continue;
+        const px=nx*p.torsoL*.80,py=ny*p.torsoW*.72;
+        ctx.beginPath();ctx.ellipse(px,py,p.R*(.10+p.coatLength*.08),p.R*.045,nx*.3,0,Math.PI*2);ctx.fill();
+      }ctx.globalAlpha=1;
+    }
     // Camouflage is a low-contrast disruptive surface pattern, never active colour change.
     if(ad.camouflage){
       ctx.fillStyle=shadeColor(ADAPT_BY_KEY.camouflage.color,-0.32);ctx.globalAlpha=0.62;
@@ -2851,6 +2990,10 @@ function morphologyDistance(a,b){
     if(!!(a.ad&&a.ad[key])!==!!(b.ad&&b.ad[key])) sum+=0.10;
     axes++;
   }
+  if(typeof COSMETIC_GENE_KEYS!=='undefined'){
+    const ac=cosmeticGenomeFor(a),bc=cosmeticGenomeFor(b);
+    for(const key of COSMETIC_GENE_KEYS){const d=ac[key]-bc[key];sum+=d*d*.72;axes+=.72;}
+  }
   return Math.sqrt(sum/Math.max(1,axes));
 }
 
@@ -3065,29 +3208,52 @@ function phenotype3DDescriptor(o){
     : Object.keys(o.ad || {}).sort();
   for (const key of known) adaptations[key] = !!(o.ad && o.ad[key]);
   const carnivore = !!adaptations.carnivore;
+  const cosmetics=typeof cosmeticGenomeFor==='function'?cosmeticGenomeFor(o):{};
+  const cv=(key,fallback)=>_threeClamp(_threeFinite(cosmetics[key],fallback),0,1);
+  const headProfile=cv('headProfile',.5),muzzleCurve=cv('muzzleCurve',.5);
+  const bodyHeight=cv('bodyHeight',.5),shoulderLine=cv('shoulderLine',.5);
+  const tailProportion=cv('tailLength',.5),tailCurl=cv('tailCurl',.5);
+  const tailTaper=cv('tailTaper',.5),earSize=cv('earSize',.5),horns=cv('horns',.42);
+  const covering=cv('covering',.5),coatLength=cv('coatLength',.48);
+  const pattern=cv('pattern',.5),pigment=cv('pigment',.5);
+  const coveringNames=['smooth skin','scales','fur','feathers'];
+  const coveringIndex=Math.min(3,Math.floor(covering*4));
+  const pigmentPalette=['#5E756E','#687D73','#7B7466','#746B70','#65747D','#80775E'];
 
   return {
     speed, sense, diet, wariness, plasticity, bodyScale,
-    torsoLength:2.18 - speed*0.22,
-    torsoWidth:1.18 - speed*0.30,
-    torsoDepth:1.02 - speed*0.10,
+    cosmetics:Object.assign({},cosmetics),
+    headProfile,muzzleCurve,bodyHeight,shoulderLine,tailProportion,tailCurl,tailTaper,
+    earSize,horns,covering,coatLength,pattern,pigment,
+    coveringType:coveringNames[coveringIndex],
+    coveringIndex,
+    torsoLength:(2.18 - speed*0.22)*(0.94+shoulderLine*.12),
+    torsoWidth:(1.18 - speed*0.30)*(0.92+shoulderLine*.16),
+    torsoDepth:(1.02 - speed*0.10)*(0.92+shoulderLine*.15),
     neckLength:0.38 + wariness*0.22,
-    neckRadius:0.28 + (1-speed)*0.07,
-    headLength:0.76 + (1-diet)*0.13 + (carnivore?0.12:0),
-    headWidth:0.62 + diet*0.20 + (carnivore?0.12:0),
-    headDepth:0.64 + diet*0.20 + (carnivore?0.24:0),
-    snoutLength:0.84 - diet*0.38 + (carnivore?0.08:0),
-    snoutWidth:0.34 + diet*0.34 + (carnivore?0.12:0),
-    snoutDepth:0.30 + diet*0.30 + (carnivore?0.13:0),
+    neckRadius:(0.28 + (1-speed)*0.07)*(0.92+headProfile*.16),
+    headLength:(0.76 + (1-diet)*0.13 + (carnivore?0.12:0))*(0.86+headProfile*.28),
+    headWidth:(0.62 + diet*0.20 + (carnivore?0.12:0))*(1.13-headProfile*.23),
+    headDepth:(0.64 + diet*0.20 + (carnivore?0.24:0))*(0.88+headProfile*.24),
+    snoutLength:(0.84 - diet*0.38 + (carnivore?0.08:0))*(0.86+muzzleCurve*.28),
+    snoutWidth:(0.34 + diet*0.34 + (carnivore?0.12:0))*(1.12-muzzleCurve*.22),
+    snoutDepth:(0.30 + diet*0.30 + (carnivore?0.13:0))*(0.88+muzzleCurve*.24),
     jawDepth:0.20 + diet*0.28 + (carnivore?0.25:0),
     eyeRadius:0.075 + sense*0.115,
     upperLegLength:0.68 + speed*0.34,
     lowerLegLength:0.58 + speed*0.52,
     footLength:0.30 + speed*0.25,
-    stanceHeight:1.02 + speed*0.62,
-    tailLength:1.55 + (1-diet)*0.18,
-    tailBaseRadius:0.25 + (1-speed)*0.06,
-    baseColor:'#667A71',
+    stanceHeight:(1.02 + speed*0.62)*(0.82+bodyHeight*.36),
+    tailLength:(1.55 + (1-diet)*0.18)*(0.72+tailProportion*.58),
+    tailBaseRadius:(0.25 + (1-speed)*0.06)*(0.88+(1-tailTaper)*.25),
+    tailCurve:(tailCurl-.5)*1.15,
+    tailTipRadius:0.018+(1-tailTaper)*0.075,
+    earLength:0.10+earSize*.34,
+    earWidth:0.07+earSize*.15,
+    hornLength:Math.max(0,(horns-.58)/.42)*.72,
+    surfaceRelief:0.025+coatLength*.075,
+    patternStrength:Math.abs(pattern-.5)*2,
+    baseColor:pigmentPalette[Math.min(pigmentPalette.length-1,Math.floor(pigment*pigmentPalette.length))],
     accentColor:_threeCladeColor(o.clade || 0),
     adaptations,
   };
@@ -3116,11 +3282,20 @@ function _threeGeometry(key){
   if (_threeGeometryCache.has(key)) return _threeGeometryCache.get(key);
   let geometry;
   if (key === 'sphere') geometry = new T.SphereGeometry(1, 12, 8);
+  else if (key === 'sphereHi') geometry = new T.SphereGeometry(1, 28, 18);
   else if (key === 'eye') geometry = new T.SphereGeometry(1, 10, 7);
   else if (key === 'limb') geometry = new T.CylinderGeometry(0.72, 1, 1, 7, 1);
+  else if (key === 'limbHi') geometry = new T.CylinderGeometry(0.76, 1, 1, 16, 3);
   else if (key === 'tail') geometry = new T.CylinderGeometry(0.55, 1, 1, 8, 1);
   else if (key === 'cone') geometry = new T.ConeGeometry(1, 1, 5, 1);
   else if (key === 'plate') geometry = new T.ConeGeometry(1, 1, 4, 1);
+  else if (key === 'feather'){
+    geometry=new T.BufferGeometry();
+    geometry.setAttribute('position',new T.Float32BufferAttribute([
+      0,0,0, -.55,.30,0, 0,1,0, .55,.30,0,
+    ],3));
+    geometry.setIndex([0,1,2,0,2,3]);geometry.computeVertexNormals();
+  }
   else if (key === 'food') geometry = new T.DodecahedronGeometry(1, 0);
   else if (key === 'ground') geometry = new T.PlaneGeometry(1,1);
   else if (key === 'halo'){
@@ -3154,6 +3329,7 @@ function _threeMaterial(key, color, options){
       metalness:options.metalness == null ? 0.02 : options.metalness,
       emissive:options.emissive || '#000000',
       emissiveIntensity:options.emissiveIntensity || 0,
+      side:options.doubleSide ? T.DoubleSide : T.FrontSide,
     });
   }
   if(options.toneMapped===false)material.toneMapped=false;
@@ -3184,20 +3360,23 @@ function _threeBuildWorldBatches(){
   const skin = _threeMaterial('world-skin','#ffffff',{vertexColors:true,roughness:0.72,emissive:'#5C7169',emissiveIntensity:0.98});
   const dark = _threeMaterial('world-dark','#ffffff',{vertexColors:true,roughness:0.80,emissive:'#435951',emissiveIntensity:0.88});
   const glossy = _threeMaterial('world-eye','#ffffff',{vertexColors:true,roughness:0.22,emissive:'#D7E3E3',emissiveIntensity:0.58});
+  const feather = _threeMaterial('world-feather','#ffffff',{vertexColors:true,roughness:0.82,emissive:'#435951',emissiveIntensity:0.82,doubleSide:true});
   const flockHalo = _threeMaterial('world-flock',_threeAdaptationColor('flocking','#58B7D9'),
     {basic:true,transparent:true,opacity:.32,depthWrite:false,doubleSide:true,toneMapped:false});
-  for (const key of ['torso','shoulder','pelvis','head','snout','jaw','footFL','footFR','footHL','footHR','camoA','camoB']){
+  for (const key of ['torso','shoulder','pelvis','head','snout','jaw','footFL','footFR','footHL','footHR',
+    'camoA','camoB','patternA','patternB','patternC','tailJ0','tailJ1','tailJ2','tailJ3','furRuff']){
     _threeMakeWorldPart(key,_threeGeometry('sphere'),key.startsWith('camo')?dark:skin);
   }
   _threeMakeWorldPart('neck',_threeGeometry('limb'),skin);
   for (const key of ['upperFL','upperFR','upperHL','upperHR','lowerFL','lowerFR','lowerHL','lowerHR']){
     _threeMakeWorldPart(key,_threeGeometry('limb'),skin);
   }
-  for (const key of ['tail0','tail1','tail2']) _threeMakeWorldPart(key,_threeGeometry('tail'),skin);
+  for (const key of ['tail0','tail1','tail2','tail3','tail4']) _threeMakeWorldPart(key,_threeGeometry('tail'),skin);
   _threeMakeWorldPart('eyeL',_threeGeometry('eye'),glossy);
   _threeMakeWorldPart('eyeR',_threeGeometry('eye'),glossy);
-  for (const key of ['armor','crest']) _threeMakeWorldPart(key,_threeGeometry('plate'),dark);
-  for (const key of ['fangL','fangR','clawFL','clawFR']) _threeMakeWorldPart(key,_threeGeometry('cone'),dark);
+  for (const key of ['armor','crest','earL','earR','scaleRidge']) _threeMakeWorldPart(key,_threeGeometry('plate'),dark);
+  _threeMakeWorldPart('featherMantle',_threeGeometry('feather'),feather);
+  for (const key of ['fangL','fangR','clawFL','clawFR','hornL','hornR','tailTuft']) _threeMakeWorldPart(key,_threeGeometry('cone'),dark);
   _threeMakeWorldPart('flockHalo',_threeGeometry('halo'),flockHalo);
   if (T.ColorManagement && 'enabled' in T.ColorManagement) T.ColorManagement.enabled = true;
 }
@@ -3448,17 +3627,28 @@ function _threeUpdateCreatureBatches(){
     _threeSegment('neck',i,root,[d.torsoLength*.38,y+.02,0],[headX-d.headLength*.30,headY,0],d.neckRadius,base,true);
     _threePart('head',i,root,headX,headY,0,d.headLength*.52,d.headDepth*.50,d.headWidth*.50,base);
     const snoutX=headX+d.headLength*.45+d.snoutLength*.44;
-    _threePart('snout',i,root,snoutX,headY-.03,0,d.snoutLength*.52,d.snoutDepth*.48,d.snoutWidth*.50,light);
+    const snoutY=headY-.03+(d.muzzleCurve-.5)*.16;
+    _threePart('snout',i,root,snoutX,snoutY,0,d.snoutLength*.52,d.snoutDepth*.48,d.snoutWidth*.50,light);
     _threePart('jaw',i,root,snoutX-.03,headY-d.snoutDepth*.36,0,d.snoutLength*.48,d.jawDepth*.34,d.snoutWidth*.48,dark);
     const eyeX=headX+d.headLength*.13,eyeY=headY+d.headDepth*.23,eyeZ=d.headWidth*.43;
     const eyeColor=ad.nocturnal?_threeAdaptationColor('nocturnal','#8294FF'):'#DCE7DF';
     _threePart('eyeL',i,root,eyeX,eyeY,-eyeZ,d.eyeRadius,d.eyeRadius,d.eyeRadius,eyeColor);
     _threePart('eyeR',i,root,eyeX,eyeY, eyeZ,d.eyeRadius,d.eyeRadius,d.eyeRadius,eyeColor);
-    const tailA=[-d.torsoLength*.48,y-.04,0],tailB=[-d.torsoLength*.78,y-.08,0];
-    const tailC=[-d.torsoLength*.76-d.tailLength*.45,y-.20,0],tailD=[-d.torsoLength*.76-d.tailLength,y-.38,0];
-    _threeSegment('tail0',i,root,tailA,tailB,d.tailBaseRadius,dark,true);
-    _threeSegment('tail1',i,root,tailB,tailC,d.tailBaseRadius*.68,dark,true);
-    _threeSegment('tail2',i,root,tailC,tailD,d.tailBaseRadius*.35,dark,true);
+    /* The first tail point is buried in the pelvic mass and every bend has a joint
+       volume. That overlap plus five progressively tapered segments avoids the old
+       cylinder visibly plugging into the torso. */
+    const tailBaseX=-d.torsoLength*.48;
+    const tailPts=[
+      [-d.torsoLength*.30,y-.03,0],
+      [tailBaseX,y-.07,0],
+      [tailBaseX-d.tailLength*.20,y-.11+d.tailCurve*.08,d.tailCurve*.04],
+      [tailBaseX-d.tailLength*.48,y-.16+d.tailCurve*.27,d.tailCurve*.10],
+      [tailBaseX-d.tailLength*.76,y-.22+d.tailCurve*.54,d.tailCurve*.07],
+      [tailBaseX-d.tailLength,y-.28+d.tailCurve*.82,0],
+    ];
+    const tailR=[d.tailBaseRadius*1.12,d.tailBaseRadius,d.tailBaseRadius*.78,d.tailBaseRadius*.54,d.tailBaseRadius*.30,d.tailTipRadius];
+    for(let k=0;k<5;k++)_threeSegment('tail'+k,i,root,tailPts[k],tailPts[k+1],(tailR[k]+tailR[k+1])*.5,dark,true);
+    for(let k=0;k<4;k++)_threePart('tailJ'+k,i,root,tailPts[k+1][0],tailPts[k+1][1],tailPts[k+1][2],tailR[k+1],tailR[k+1],tailR[k+1],dark);
     const limbs=[['F','L',1,-1],['F','R',1,1],['H','L',-1,-1],['H','R',-1,1]];
     for(const limb of limbs){
       const front=limb[2]>0,side=limb[3],suffix=limb[0]+limb[1];
@@ -3485,6 +3675,27 @@ function _threeUpdateCreatureBatches(){
     const camoColor=_threeAdaptationColor('camouflage','#75B798');
     _threePart('camoA',i,root,-.32,y+d.torsoDepth*.43,-d.torsoWidth*.25,ad.camouflage?.34:1e-5,ad.camouflage?.06:1e-5,ad.camouflage?.22:1e-5,camoColor);
     _threePart('camoB',i,root,.32,y+d.torsoDepth*.42,d.torsoWidth*.20,ad.camouflage?.28:1e-5,ad.camouflage?.06:1e-5,ad.camouflage?.18:1e-5,camoColor);
+    const patternColor=base.clone().lerp(new T.Color(d.accentColor),.38).multiplyScalar(.82);
+    const patternVisible=d.patternStrength>.22;
+    _threePart('patternA',i,root,-.42,y+d.torsoDepth*.47,-d.torsoWidth*.23,patternVisible?.30*d.patternStrength:1e-5,.025,patternVisible?.22:1e-5,patternColor);
+    _threePart('patternB',i,root,.02,y+d.torsoDepth*.50,d.torsoWidth*.18,patternVisible?.26*d.patternStrength:1e-5,.025,patternVisible?.18:1e-5,patternColor);
+    _threePart('patternC',i,root,.43,y+d.torsoDepth*.43,-d.torsoWidth*.20,patternVisible?.21*d.patternStrength:1e-5,.025,patternVisible?.15:1e-5,patternColor);
+    const earColor=light.clone();
+    const earQ=new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),Math.PI);
+    for(const side of [-1,1])_threePart(side<0?'earL':'earR',i,root,headX-d.headLength*.18,headY+d.headDepth*.42,side*d.headWidth*.34,
+      d.earWidth,d.earLength,d.earWidth,earColor,earQ);
+    const hornColor=dark.clone().lerp(new T.Color('#C9B991'),.35),showHorns=d.hornLength>.015;
+    for(const side of [-1,1]){
+      const hq=new T.Quaternion().setFromEuler(new T.Euler(0,0,side*.38));
+      _threePart(side<0?'hornL':'hornR',i,root,headX-d.headLength*.05,headY+d.headDepth*.48,side*d.headWidth*.27,
+        showHorns?.09:1e-5,showHorns?d.hornLength:1e-5,showHorns?.09:1e-5,hornColor,hq);
+    }
+    const isScale=d.coveringIndex===1,isFur=d.coveringIndex===2,isFeather=d.coveringIndex===3;
+    _threePart('scaleRidge',i,root,-.05,y+d.torsoDepth*.55,0,isScale?.20+d.surfaceRelief:1e-5,isScale?.28+d.surfaceRelief:1e-5,isScale?.16:1e-5,dark);
+    _threePart('furRuff',i,root,d.torsoLength*.37,y+.02,0,isFur?d.neckRadius*1.42:1e-5,isFur?d.neckRadius*1.55:1e-5,isFur?d.neckRadius*1.42:1e-5,light);
+    _threePart('featherMantle',i,root,-.02,y+d.torsoDepth*.56,0,isFeather?.28+d.surfaceRelief:1e-5,isFeather?.44+d.surfaceRelief:1e-5,isFeather?.20:1e-5,light);
+    const tip=tailPts[5],tuftQ=new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),-Math.PI/2);
+    _threePart('tailTuft',i,root,tip[0],tip[1],tip[2],(isFur||isFeather)?.14+d.surfaceRelief:1e-5,(isFur||isFeather)?.32+d.surfaceRelief:1e-5,(isFur||isFeather)?.14+d.surfaceRelief:1e-5,light,tuftQ);
     const fangColor=ad.venom?_threeAdaptationColor('venom','#C88BE0'):'#E9E4D2';
     const showFangs=ad.venom||ad.carnivore;
     const fq=new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),Math.PI);
@@ -3579,10 +3790,44 @@ function drawThreeWorld(){
 
 function _threeCylinderBetween(a,b,radius,color,kind){
   const T=_threeApi(),delta=b.clone().sub(a),length=Math.max(.001,delta.length());
-  const mesh=new T.Mesh(_threeGeometry(kind||'limb'),_threeMaterial('card-'+color,color,{roughness:.76}));
+  const mesh=new T.Mesh(_threeGeometry(kind||'limbHi'),_threeMaterial('card-'+color,color,{roughness:.76}));
   mesh.position.copy(a).add(b).multiplyScalar(.5);
   mesh.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),delta.normalize());
   mesh.scale.set(radius,length,radius);return mesh;
+}
+
+/* A continuously tapered Catmull-Rom tube. The old portrait tail was three separate
+   cylinders, so every radius change produced a visible socket. This geometry shares
+   rings and normals across the whole curve; its first ring is buried inside the
+   torso or skull so the remaining junction reads as grown tissue rather than parts. */
+function _threeOrganicTube(points,radii,color,options){
+  const T=_threeApi();options=options||{};
+  const curve=new T.CatmullRomCurve3(points,false,'catmullrom',.42);
+  const segments=options.segments||24,radial=options.radial||14;
+  const positions=[],indices=[];
+  const radiusAt=(values,t)=>{
+    const scaled=t*Math.max(1,values.length-1),i=Math.min(values.length-2,Math.floor(scaled));
+    const f=scaled-i;return values[i]+(values[i+1]-values[i])*f;
+  };
+  for(let i=0;i<=segments;i++){
+    const t=i/segments,center=curve.getPoint(t),tangent=curve.getTangent(t).normalize();
+    const ringA=new T.Vector3(0,0,1).addScaledVector(tangent,-tangent.z).normalize();
+    const ringB=new T.Vector3().crossVectors(tangent,ringA).normalize();
+    const width=radiusAt(options.widths||radii,t),depth=radiusAt(options.depths||radii,t);
+    for(let j=0;j<radial;j++){
+      const angle=j/radial*Math.PI*2;
+      const p=center.clone().addScaledVector(ringA,Math.cos(angle)*width).addScaledVector(ringB,Math.sin(angle)*depth);
+      positions.push(p.x,p.y,p.z);
+    }
+  }
+  for(let i=0;i<segments;i++)for(let j=0;j<radial;j++){
+    const next=(j+1)%radial,a=i*radial+j,b=i*radial+next,c=(i+1)*radial+next,d=(i+1)*radial+j;
+    indices.push(a,b,d,b,c,d);
+  }
+  const geometry=new T.BufferGeometry();
+  geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setIndex(indices);geometry.computeVertexNormals();
+  const mesh=new T.Mesh(geometry,_threeMaterial('card-organic-'+color,color,{roughness:options.roughness==null ? .78 : options.roughness}));
+  mesh.userData.ownedGeometry=true;return mesh;
 }
 
 function _threeMesh(geometry,color,scale,position,options){
@@ -3594,15 +3839,15 @@ function _threeAddDetailedLimb(group,d,front,side,color,ad){
   const T=_threeApi(),root=new T.Group();
   root.position.set(front?d.torsoLength*.31:-d.torsoLength*.34,d.stanceHeight-.08,side*d.torsoWidth*.40);
   root.rotation.z=front?-.14:.18;
-  const upper=_threeMesh('limb',color,[.11,d.upperLegLength,.11],[0,-d.upperLegLength*.5,0]);
-  const knee=new T.Mesh(_threeGeometry('sphere'),_threeMaterial('card-joint-'+color,color,{roughness:.8}));
+  const upper=_threeMesh('limbHi',color,[.11,d.upperLegLength,.11],[0,-d.upperLegLength*.5,0]);
+  const knee=new T.Mesh(_threeGeometry('sphereHi'),_threeMaterial('card-joint-'+color,color,{roughness:.8}));
   knee.scale.setScalar(.14);knee.position.y=-d.upperLegLength;
   const lowerRoot=new T.Group();lowerRoot.position.y=-d.upperLegLength;lowerRoot.rotation.z=front?.24:-.28;
-  lowerRoot.add(_threeMesh('limb',color,[.082,d.lowerLegLength,.082],[0,-d.lowerLegLength*.5,0]));
-  const ankle=new T.Mesh(_threeGeometry('sphere'),_threeMaterial('card-joint-'+color,color,{roughness:.8}));
+  lowerRoot.add(_threeMesh('limbHi',color,[.082,d.lowerLegLength,.082],[0,-d.lowerLegLength*.5,0]));
+  const ankle=new T.Mesh(_threeGeometry('sphereHi'),_threeMaterial('card-joint-'+color,color,{roughness:.8}));
   ankle.scale.setScalar(.10);ankle.position.y=-d.lowerLegLength;lowerRoot.add(ankle);
   const foot=new T.Group();foot.position.set(0,-d.lowerLegLength,0);
-  foot.add(_threeMesh('sphere',color,[d.footLength*.52,.075,.12],[d.footLength*.34,0,0]));
+  foot.add(_threeMesh('sphereHi',color,[d.footLength*.52,.075,.12],[d.footLength*.34,0,0]));
   for(let digit=-1;digit<=1;digit++){
     const toe=_threeMesh('box',color,[d.footLength*.44,.035,.035],[d.footLength*.65,-.02,digit*.10]);foot.add(toe);
     if(ad.claws&&front){
@@ -3622,25 +3867,99 @@ function _threeBuildDetailedCreature(o){
   const dark=new T.Color(base).multiplyScalar(.67).getStyle();
   const light=new T.Color(base).lerp(new T.Color('#FFFFFF'),.17).getStyle();
   const y=d.stanceHeight;
-  group.add(_threeMesh('sphere',base,[d.torsoLength*.5,d.torsoDepth*.5,d.torsoWidth*.5],[0,y,0]));
-  group.add(_threeMesh('sphere',light,[d.torsoLength*.25,d.torsoDepth*.53,d.torsoWidth*.53],[d.torsoLength*.31,y-.02,0]));
-  group.add(_threeMesh('sphere',dark,[d.torsoLength*.23,d.torsoDepth*.47,d.torsoWidth*.46],[-d.torsoLength*.34,y-.06,0]));
+  /* A single elliptical axial mesh now forms pelvis, ribcage, and shoulders. The
+     profile changes continuously at shared rings rather than intersecting three
+     scaled spheres, so inherited shoulder and torso proportions blend naturally. */
+  const bodyX=[-.56,-.43,-.18,.10,.34,.54].map(v=>v*d.torsoLength);
+  const bodyPts=bodyX.map((x,i)=>new T.Vector3(x,y+[-.07,-.04,0,.015,.025+d.shoulderLine*.035,0][i],0));
+  group.add(_threeOrganicTube(bodyPts,[1,1,1,1,1,1],base,{segments:32,radial:20,
+    widths:[d.torsoWidth*.20,d.torsoWidth*.44,d.torsoWidth*.50,d.torsoWidth*.51,d.torsoWidth*.48,d.torsoWidth*.22],
+    depths:[d.torsoDepth*.18,d.torsoDepth*.43,d.torsoDepth*.50,d.torsoDepth*.52,d.torsoDepth*.54,d.torsoDepth*.22]}));
   const headX=d.torsoLength*.56+d.neckLength+d.headLength*.30,headY=y+d.neckLength*.10;
-  group.add(_threeCylinderBetween(new T.Vector3(d.torsoLength*.37,y+.02,0),new T.Vector3(headX-d.headLength*.28,headY,0),d.neckRadius,base));
-  group.add(_threeMesh('sphere',base,[d.headLength*.52,d.headDepth*.50,d.headWidth*.50],[headX,headY,0]));
+  group.add(_threeOrganicTube([
+    new T.Vector3(d.torsoLength*.24,y-.01,0),
+    new T.Vector3(d.torsoLength*.42,y+.02+d.shoulderLine*.05,0),
+    new T.Vector3(headX-d.headLength*.42,headY-.02,0),
+    new T.Vector3(headX-d.headLength*.17,headY,0),
+  ],[d.neckRadius*1.34,d.neckRadius*1.08,d.neckRadius*.94,d.neckRadius*.82],base,{segments:18}));
+  group.add(_threeMesh('sphereHi',base,[d.headLength*.52,d.headDepth*.50,d.headWidth*.50],[headX,headY,0]));
   const snoutX=headX+d.headLength*.45+d.snoutLength*.44;
-  group.add(_threeMesh('sphere',light,[d.snoutLength*.52,d.snoutDepth*.48,d.snoutWidth*.50],[snoutX,headY-.03,0]));
-  const jaw=_threeMesh('sphere',dark,[d.snoutLength*.48,d.jawDepth*.36,d.snoutWidth*.48],[snoutX-.03,headY-d.snoutDepth*.38,0]);group.add(jaw);
+  const snoutY=headY-.03+(d.muzzleCurve-.5)*.16;
+  group.add(_threeOrganicTube([
+    new T.Vector3(headX-d.headLength*.12,headY,0),
+    new T.Vector3(headX+d.headLength*.30,headY-.01,0),
+    new T.Vector3(snoutX-d.snoutLength*.18,(headY+snoutY)*.5,0),
+    new T.Vector3(snoutX+d.snoutLength*.46,snoutY,0),
+  ],[1,1,1,1],light,{segments:20,radial:16,
+    widths:[d.headWidth*.44,d.headWidth*.45,d.snoutWidth*.48,d.snoutWidth*.27],
+    depths:[d.headDepth*.39,d.headDepth*.38,d.snoutDepth*.47,d.snoutDepth*.27]}));
+  const jaw=_threeMesh('sphereHi',dark,[d.snoutLength*.48,d.jawDepth*.36,d.snoutWidth*.48],[snoutX-.03,headY-d.snoutDepth*.38,0]);group.add(jaw);
   for(const side of [-1,1]){
     const eyeColor=ad.nocturnal?_threeAdaptationColor('nocturnal','#8294FF'):'#E9F1EA';
     const eye=_threeMesh('eye',eyeColor,[d.eyeRadius,d.eyeRadius,d.eyeRadius],[headX+d.headLength*.13,headY+d.headDepth*.24,side*d.headWidth*.44],ad.nocturnal?{roughness:.2,emissive:eyeColor,emissiveIntensity:.8}:{roughness:.2});group.add(eye);
     const pupil=_threeMesh('eye','#091013',[d.eyeRadius*.42,d.eyeRadius*.42,d.eyeRadius*.20],[headX+d.headLength*.17,headY+d.headDepth*.25,side*(d.headWidth*.44+d.eyeRadius*.80)],{roughness:.1});group.add(pupil);
+    const ear=_threeMesh('plate',light,[d.earWidth,d.earLength,d.earWidth],[headX-d.headLength*.18,headY+d.headDepth*.43,side*d.headWidth*.33]);
+    ear.rotation.x=side*.28;ear.rotation.z=Math.PI;group.add(ear);
   }
-  const tailPts=[new T.Vector3(-d.torsoLength*.46,y-.03,0),new T.Vector3(-d.torsoLength*.78,y-.10,0),new T.Vector3(-d.torsoLength*.78-d.tailLength*.43,y-.22,.04),new T.Vector3(-d.torsoLength*.78-d.tailLength,y-.38,.02)];
-  group.add(_threeCylinderBetween(tailPts[0],tailPts[1],d.tailBaseRadius,dark,'tail'));
-  group.add(_threeCylinderBetween(tailPts[1],tailPts[2],d.tailBaseRadius*.68,dark,'tail'));
-  group.add(_threeCylinderBetween(tailPts[2],tailPts[3],d.tailBaseRadius*.34,dark,'tail'));
+  const tailBaseX=-d.torsoLength*.47;
+  const tailPts=[
+    new T.Vector3(-d.torsoLength*.28,y-.03,0),
+    new T.Vector3(tailBaseX,y-.07,0),
+    new T.Vector3(tailBaseX-d.tailLength*.20,y-.11+d.tailCurve*.08,d.tailCurve*.04),
+    new T.Vector3(tailBaseX-d.tailLength*.48,y-.16+d.tailCurve*.27,d.tailCurve*.10),
+    new T.Vector3(tailBaseX-d.tailLength*.76,y-.22+d.tailCurve*.54,d.tailCurve*.07),
+    new T.Vector3(tailBaseX-d.tailLength,y-.28+d.tailCurve*.82,0),
+  ];
+  group.add(_threeOrganicTube(tailPts,[d.tailBaseRadius*1.18,d.tailBaseRadius,d.tailBaseRadius*.78,
+    d.tailBaseRadius*.53,d.tailBaseRadius*.28,d.tailTipRadius],dark,{segments:34,radial:16}));
   for(const front of [false,true])for(const side of [-1,1])_threeAddDetailedLimb(group,d,front,side,base,ad);
+
+  /* Neutral ornaments are inherited anatomy, not badges. Horn expression is
+     continuous above a threshold; ears, pigment, pattern, and covering vary in all
+     animals, including founders and organisms in the controlled scenarios. */
+  if(d.hornLength>.015){
+    const hornColor=new T.Color(dark).lerp(new T.Color('#C9B991'),.38).getStyle();
+    for(const side of [-1,1])group.add(_threeOrganicTube([
+      new T.Vector3(headX-d.headLength*.10,headY+d.headDepth*.36,side*d.headWidth*.25),
+      new T.Vector3(headX-d.headLength*.18,headY+d.headDepth*.62,side*(d.headWidth*.34+d.hornLength*.10)),
+      new T.Vector3(headX-d.headLength*.04,headY+d.headDepth*.72+d.hornLength*.45,side*(d.headWidth*.32+d.hornLength*.28)),
+    ],[.105,.072,.012],hornColor,{segments:14,radial:10,roughness:.63}));
+  }
+  const patternColor=new T.Color(base).lerp(new T.Color(d.accentColor),.40).multiplyScalar(.78).getStyle();
+  if(d.patternStrength>.14){
+    const marks=[[-.46,.28,-.36,.23],[-.12,.42,.25,.18],[.22,.37,-.28,.21],[.47,.22,.20,.16]];
+    for(const m of marks)group.add(_threeMesh('sphereHi',patternColor,
+      [m[3]*d.patternStrength,.018,m[3]*.68],[m[0]*d.torsoLength,y+d.torsoDepth*m[1],m[2]*d.torsoWidth]));
+  }
+  if(d.coveringIndex===1){
+    for(let row=-2;row<=2;row++)for(let col=-4;col<=4;col++){
+      const nx=col/5,nz=row/3;if(nx*nx+nz*nz>.82)continue;
+      const scale=_threeMesh('sphereHi',dark,[.105,.022,.075],[nx*d.torsoLength*.47,y+d.torsoDepth*(.46-.08*Math.abs(nx)),nz*d.torsoWidth*.48]);
+      scale.rotation.y=(row&1)?.18:-.18;group.add(scale);
+    }
+  }else if(d.coveringIndex===2){
+    for(let row=-2;row<=2;row++)for(let col=-5;col<=5;col++){
+      const nx=col/6,nz=row/3;if(nx*nx+nz*nz>.88)continue;
+      const tuft=_threeMesh('cone',light,[.022+d.surfaceRelief*.20,d.surfaceRelief,.022+d.surfaceRelief*.20],
+        [nx*d.torsoLength*.48,y+d.torsoDepth*(.47-.07*Math.abs(nx)),nz*d.torsoWidth*.48]);
+      tuft.rotation.z=(nx*.16);group.add(tuft);
+    }
+  }else if(d.coveringIndex===3){
+    for(let row=-2;row<=2;row++)for(let col=-4;col<=4;col++){
+      const nx=col/5,nz=row/3;if(nx*nx+nz*nz>.82)continue;
+      const feather=_threeMesh('feather',dark,[.075+d.surfaceRelief*.18,.18+d.surfaceRelief,1],
+        [nx*d.torsoLength*.47,y+d.torsoDepth*(.48-.07*Math.abs(nx)),nz*d.torsoWidth*.46],{doubleSide:true});
+      feather.rotation.z=Math.PI*.43+nx*.10;feather.rotation.x=nz*.22;group.add(feather);
+    }
+  }
+  if(d.coveringIndex>=2){
+    const tip=tailPts[tailPts.length-1];
+    for(let j=-2;j<=2;j++){
+      const tuft=_threeMesh(d.coveringIndex===3?'feather':'cone',light,
+        d.coveringIndex===3?[.08+d.surfaceRelief*.25,.24+d.surfaceRelief,1]:[.05+d.surfaceRelief*.25,.18+d.surfaceRelief,.04],
+        [tip.x,tip.y+j*.025,tip.z+j*.035],{doubleSide:true});tuft.rotation.z=d.coveringIndex===3?Math.PI/2:-Math.PI/2+j*.09;group.add(tuft);
+    }
+  }
   if(ad.armor){
     const color=_threeAdaptationColor('armor','#9BB4C4');
     for(let i=-3;i<=3;i++){const plate=_threeMesh('plate',color,[.20,.30+.06*(3-Math.abs(i)),.26],[i*d.torsoLength*.115,y+d.torsoDepth*.54,0]);group.add(plate);}
@@ -3651,7 +3970,7 @@ function _threeBuildDetailedCreature(o){
   }
   if(ad.camouflage){
     const color=_threeAdaptationColor('camouflage','#75B798');
-    for(const p of [[-.48,.18,-.42,.28],[.02,.25,.43,.24],[.43,.10,-.36,.20]])group.add(_threeMesh('sphere',color,[p[3],.035,p[3]*.68],[p[0],y+d.torsoDepth*.49,p[2]]));
+    for(const p of [[-.48,.18,-.42,.28],[.02,.25,.43,.24],[.43,.10,-.36,.20]])group.add(_threeMesh('sphereHi',color,[p[3],.035,p[3]*.68],[p[0],y+d.torsoDepth*.49,p[2]]));
   }
   if(ad.venom||ad.carnivore){
     const color=ad.venom?_threeAdaptationColor('venom','#C88BE0'):'#EEE7D4';
@@ -3661,7 +3980,7 @@ function _threeBuildDetailedCreature(o){
   }
   if(ad.venom){
     const color=_threeAdaptationColor('venom','#C88BE0');
-    for(const side of [-1,1])group.add(_threeMesh('sphere',color,[.15,.13,.15],[headX-.08,headY-.12,side*d.headWidth*.47]));
+    for(const side of [-1,1])group.add(_threeMesh('sphereHi',color,[.15,.13,.15],[headX-.08,headY-.12,side*d.headWidth*.47]));
   }
   group.position.y=.03;return group;
 }
@@ -3670,6 +3989,13 @@ function _threeMorphologyDistance(a,b){
   let sum=0,n=0;
   for(const key of ['speed','size','sense','diet']){const t=_threeTraitDef(key);if(!t)continue;const z=((a[key]||0)-(b[key]||0))/(t.max-t.min);sum+=z*z;n++;}
   for(const key of _THREE_PHYSICAL){if(!!(a.ad&&a.ad[key])!==!!(b.ad&&b.ad[key]))sum+=.10;n++;}
+  if(typeof COSMETIC_GENE_KEYS!=='undefined'){
+    const ac=typeof cosmeticGenomeFor==='function'?cosmeticGenomeFor(a):{};
+    const bc=typeof cosmeticGenomeFor==='function'?cosmeticGenomeFor(b):{};
+    for(const key of COSMETIC_GENE_KEYS){
+      const z=_threeFinite(ac[key],.5)-_threeFinite(bc[key],.5);sum+=z*z*.72;n+=.72;
+    }
+  }
   return Math.sqrt(sum/Math.max(1,n));
 }
 function _threeRepresentatives(clade,limit){
@@ -3767,6 +4093,17 @@ function _threeUpdateSpecimenOverlay(clades){
         const badge=document.createElement('span');badge.className='adGlyph';badge.textContent='↻';badge.style.color='#7FD1AE';badge.style.pointerEvents='auto';
         badge.title='Inherited plasticity: learns escape skill after surviving encounters.';badge.setAttribute('data-tip',badge.title);
         badge.setAttribute('role','img');badge.setAttribute('aria-label',badge.title);badge.tabIndex=0;badges.appendChild(badge);
+      }
+      const form=phenotype3DDescriptor(representative);
+      const coveringGlyph=['·','▦','≋','⌁'][form.coveringIndex]||'·';
+      const coveringBadge=document.createElement('span');coveringBadge.className='adGlyph';coveringBadge.textContent=coveringGlyph;
+      coveringBadge.style.color=form.baseColor;coveringBadge.style.pointerEvents='auto';coveringBadge.tabIndex=0;
+      coveringBadge.title='Neutral inherited covering: '+form.coveringType+'. Recombines and mutates, but currently has no fitness effect.';
+      coveringBadge.setAttribute('data-tip',coveringBadge.title);coveringBadge.setAttribute('role','img');coveringBadge.setAttribute('aria-label',coveringBadge.title);badges.appendChild(coveringBadge);
+      if(form.hornLength>.015){
+        const hornBadge=document.createElement('span');hornBadge.className='adGlyph';hornBadge.textContent='⋔';hornBadge.style.color='#C9B991';hornBadge.style.pointerEvents='auto';hornBadge.tabIndex=0;
+        hornBadge.title='Neutral inherited head ornament: horn expression. Recombines and mutates without changing fitness.';
+        hornBadge.setAttribute('data-tip',hornBadge.title);hornBadge.setAttribute('role','img');hornBadge.setAttribute('aria-label',hornBadge.title);badges.appendChild(hornBadge);
       }
       label.appendChild(badges);
     }

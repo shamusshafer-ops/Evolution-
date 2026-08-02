@@ -115,6 +115,15 @@ unrelated stock animals. Speed lengthens distal limbs and narrows the stance, si
 shown at a common scale, sense alters restrained eye anatomy, and diet reshapes the
 jaw from a soft-food cropper to a woody-food crusher.
 
+Every individual also carries 13 neutral appearance loci. They independently vary
+head and muzzle profile, shoulder line, standing height, ear size, tail proportion,
+curl and taper, pigment, pattern, horn expression, and integument. The integument
+locus spans smooth skin, scales, fur, and feather-like keratin; coat length controls
+surface relief and tail display. These genes choose one parental allele per locus and
+undergo small mutations, so families resemble one another while lineages visibly
+drift. They do not affect metabolism, mating, or species derivation: an ornament is
+not labelled adaptive merely because it is noticeable.
+
 Physical adaptations are physical: armour becomes overlapping plates, venom uses
 fangs and glands, carnivores develop cutting teeth, claws attach to real digits,
 camouflage changes surface pattern, and courtship produces a crest. Pack hunting,
@@ -138,9 +147,11 @@ zoom. Fullscreen resizes that exact renderer rather than creating a second world
 camera position and orientation survive the transition.
 
 World organisms are rendered as instanced anatomical parts, while cards use complete
-articulated rigs. Both consume the same traits and adaptations and neither consumes
-simulation randomness. Append `?renderer=2d` to the URL to retain the previous 2D
-scientific renderer as a fallback.
+articulated rigs. Portrait necks, muzzles, horns, and tails use continuous tapered
+curves with their roots buried inside adjoining volumes, avoiding visible cylinder
+sockets at the torso and skull. Both views consume the same ecological, adaptation,
+and appearance genes; neither consumes simulation randomness. Append `?renderer=2d`
+to the URL to retain the previous 2D scientific renderer as a fallback.
 
 ## Predator–prey evolution
 

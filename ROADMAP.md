@@ -5,6 +5,16 @@
 
 ## Status
 
+**Heritable cosmetic drift shipped (2026-08-01).** Every organism now has 13 neutral
+appearance loci covering cranial proportions, stature, tail geometry, pigment,
+pattern, integument, and horns. They recombine and mutate through a deterministic
+hash channel that never advances the ecological RNG, and they remain excluded from
+fitness and reproductive isolation. Specimen sampling now includes cosmetic distance.
+Continuous tapered portrait geometry and overlapping world joints remove the most
+visible torso-tail and neck-head sockets.
+
+## Status
+
 **M5 shipped (2026-07-30).** Predation. 154 tests.
 
 ### Size is finally selectable — the oldest open problem, fixed

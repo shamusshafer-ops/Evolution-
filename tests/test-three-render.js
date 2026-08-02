@@ -23,6 +23,8 @@ check('3D world renderer exposes draw, fit, disposal, and camera contracts',
       typeof rotateThreeWorldBy==='function'&&typeof resetThreeWorldView==='function');
 check('3D specimen renderer exposes draw and interaction contracts',
       typeof drawThreeSpecimens==='function'&&typeof bindThreeSpecimenControls==='function');
+check('organic tapered mesh builder is available to detailed anatomy',
+      typeof _threeOrganicTube==='function');
 
 let selectionLayout=null,selectionScale=null;
 if(typeof _threeLayoutCardRow==='function'&&typeof _threeCardSelections!=='undefined'){
@@ -73,6 +75,27 @@ if(typeof phenotype3DDescriptor==='function' &&
           Number.isFinite(first[k])&&first[k]>=0&&first[k]<=1));
   check('descriptor carries valid body and lineage colours',
         typeof first.baseColor==='string'&&typeof first.accentColor==='string');
+
+  check('cosmetic genes are separate from ecological and speciation traits',
+        COSMETIC_GENE_KEYS.length===13&&COSMETIC_GENE_KEYS.every(k=>
+          !TRAIT_KEYS.includes(k)&&!SPECIATION_TRAITS.some(t=>t.key===k)));
+  const cosmeticLow=Object.fromEntries(COSMETIC_GENE_KEYS.map(k=>[k,0]));
+  const cosmeticHigh=Object.fromEntries(COSMETIC_GENE_KEYS.map(k=>[k,1]));
+  const lowSource=specimen();lowSource.cos=cosmeticLow;
+  const highSource=specimen();highSource.cos=cosmeticHigh;
+  const lowForm=phenotype3DDescriptor(lowSource),highForm=phenotype3DDescriptor(highSource);
+  check('neutral head, stature, and tail loci visibly change homologous anatomy',
+        highForm.headLength>lowForm.headLength&&highForm.stanceHeight>lowForm.stanceHeight&&
+        highForm.tailLength>lowForm.tailLength&&highForm.tailCurve>lowForm.tailCurve);
+  check('integument locus spans smooth skin through feather-like keratin',
+        lowForm.coveringType==='smooth skin'&&highForm.coveringType==='feathers');
+  check('horn expression and ear size are continuous inherited ornaments',
+        lowForm.hornLength===0&&highForm.hornLength>0&&highForm.earLength>lowForm.earLength);
+  check('descriptor cosmetic data is detached from the organism genome',(()=>{
+    lowForm.cosmetics.headProfile=1;return lowSource.cos.headProfile===0;
+  })());
+  check('cosmetic divergence contributes to representative morphology distance',
+        _threeMorphologyDistance(lowSource,highSource)>0);
 
   /* Render scale belongs to the camera/model instance, not phenotype derivation.
      Extra call-site arguments therefore cannot leak card or map scale into anatomy. */
@@ -132,6 +155,19 @@ if(typeof phenotype3DDescriptor==='function' &&
         anatomyKeys.every(k=>close(socialOff[k],socialOn[k])));
 
   initWorld({seed:'three-render-contract',scenario:'livingworld'});
+  check('every founder receives a complete bounded appearance genome',
+        state.organisms.every(o=>COSMETIC_GENE_KEYS.every(k=>Number.isFinite(o.cos[k])&&o.cos[k]>=0&&o.cos[k]<=1)));
+  check('founders contain visible neutral genetic variation',
+        new Set(state.organisms.map(o=>o.cos.covering.toFixed(3))).size>4&&
+        new Set(state.organisms.map(o=>o.cos.tailCurl.toFixed(3))).size>4);
+  const cosmeticRngBefore=_rngState,cosmeticSpareBefore=_spare;
+  const inheritedA=inheritCosmeticGenome(state.organisms[0],state.organisms[1],999,state.seed);
+  const inheritedB=inheritCosmeticGenome(state.organisms[0],state.organisms[1],999,state.seed);
+  check('cosmetic inheritance is deterministic and consumes no ecological RNG',
+        JSON.stringify(inheritedA)===JSON.stringify(inheritedB)&&
+        _rngState===cosmeticRngBefore&&_spare===cosmeticSpareBefore);
+  check('inherited appearance stays bounded at every locus',
+        COSMETIC_GENE_KEYS.every(k=>inheritedA[k]>=0&&inheritedA[k]<=1));
   const stateRef=state,organismsRef=state.organisms;
   const beforeState=stateSnapshot(),beforeRng=_rngState,beforeSpare=_spare;
   phenotype3DDescriptor(state.organisms[0]);
