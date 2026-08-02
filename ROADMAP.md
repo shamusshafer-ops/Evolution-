@@ -50,7 +50,7 @@ as accelerated phenotypic variation, never as a literal biological mutation rate
 
 ### Recommended order
 
-#### R0 — Make causes inspectable (three slices shipped 2026-08-02; remaining S–M)
+#### R0 — Make causes inspectable (four slices shipped 2026-08-02; remaining S–M)
 
 This remains the highest-value foundation. The simulation already produces more stories
 than the interface can explain.
@@ -76,16 +76,20 @@ than the interface can explain.
   navigation. The census stores stable lineage ids and isolates the selected band.
   Both analytical graphs show tick-aligned Notebook markers, explicit visible tick
   bounds, and a bright marker for the selected event.
+- Every non-baseline Notebook entry now pairs its event snapshot with a 300-tick
+  follow-up. Signed total/focal population, resource, species, generation, and trait
+  changes remain labelled as temporal association rather than causal attribution.
+  Seasonal and day/night scenarios show their real modeled phase in the Population
+  panel and graph axes, including the exact seasonal food multiplier.
 - Scenarios are grouped as Foundations, Speciation, Coevolution, and Living Worlds; the
   About panel now describes six traits, 3D organisms, model-evidence labels, and the
   procedural-planet ecosystem-steward direction.
-- The slices are guarded by 53 new checks. The full 535-check suite preserves established
+- The slices are guarded by 65 new checks. The full 547-check suite preserves established
   scenario outcomes, and build parity remains clean.
 
 **Remaining R0 work:**
 
-- Add before/after evidence windows, seasonal/day-night phase labels, and historical
-  lineage-specific trait distributions. Current lineage filtering is exact in the
+- Add historical lineage-specific trait distributions. Current lineage filtering is exact in the
   census, while the trait ribbon intentionally remains population-wide until those
   historical per-lineage distributions are recorded. Keep “associated with,” not
   “caused by,” unless a controlled comparison supports causation.

@@ -4,7 +4,7 @@
    in this file so it can be tuned without reading the simulation.
    ========================================================================== */
 
-const VERSION = '0.2.2';
+const VERSION = '0.2.3';
 
 /* ---------- Changelog ----------
    Rendered inside the About panel. Newest entry first. This is a standing commitment,
@@ -14,6 +14,8 @@ const VERSION = '0.2.2';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-08-02', tag:'R0 evidence', title:'Events gain an honest observation window',
+    text:'Every non-baseline Field Notebook entry now records an event snapshot and schedules a 300-tick follow-up. The follow-up reports signed changes in total and focal-lineage population, food, species count, generation, and all continuous traits while explicitly stating that change after an event is not proof of causation. Seasonal and day/night scenarios expose their current modeled phase in the Population panel and on both graph axes; seasonal labels include the exact live food-production multiplier rather than invented calendar dates. Evidence sampling and phase display consume no RNG and do not alter ecological state.' },
   { date:'2026-08-02', tag:'R0 lineage', title:'Notebook evidence now leads back to living populations',
     text:'Selecting a species, specimen, or lineage-bearing Notebook entry now centres the map on that lineage and highlights its stable identity in both the live world and census. Locate provides a one-time view; Follow continuously tracks the population’s wrap-aware centre and automatically releases when the player navigates manually. Selected organisms receive bright map haloes while other lineages dim in both 2D and 3D. The census now stores persistent lineage ids rather than mistaking display rank for ancestry. Notebook events appear as tick-aligned markers on both analytical graphs, with the selected event emphasized and explicit visible tick bounds. These views consume no RNG and do not change ecological outcomes.' },
   { date:'2026-08-02', tag:'R0 research', title:'Five paired seeds turn an anecdote into an experiment',
@@ -227,6 +229,7 @@ const SEASON = {
   period: 2200,            // ticks per full cycle
   amplitude: 0.55,         // food multiplier swings between (1-amp) and (1+amp)
 };
+const NOTEBOOK = { followupTicks:300 };
 // Gated by the SCENARIO's cfg.seasonal at the call site, not by a flag in here — an
 // earlier version double-gated on a global SEASON.enabled that nothing ever set,
 // which silently made every "seasonal" run identical to Temperate. Caught by

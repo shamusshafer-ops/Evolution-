@@ -172,7 +172,7 @@
 
   /* Research and evidence tools */
   .researchCard{ border-left:2px solid var(--sense); padding-left:9px; }
-  .researchCard h3, #inspector h3{
+  .researchCard h3, #inspector h3, #notebookDetail h3{
     margin:9px 0 5px; color:var(--sense); font-size:9px; letter-spacing:.12em; text-transform:uppercase;
   }
   .researchCard p, .comparisonVerdict, .inspectNote, .evidenceLine, .emptyState{
@@ -188,6 +188,7 @@
   .compact dt, .compact dd{ font-size:10.5px; }
   .inspectHead{ display:flex; align-items:center; gap:7px; margin-bottom:7px; }
   .inspectHead span:last-child{ margin-left:auto; color:var(--chalk-dim); font-size:10px; }
+  #statPhase{ max-width:220px; color:var(--food); font-size:10px; line-height:1.35; }
   #notebookGrid{ display:grid; grid-template-columns:minmax(125px,.8fr) minmax(0,1.4fr); gap:8px; }
   #notebookList{ max-height:230px; overflow:auto; border-right:1px solid var(--rule); padding-right:7px; }
   .notebookEntry{
@@ -389,6 +390,7 @@
           <dt>Species</dt><dd id="statSpecies">—</dd>
           <dt>Generation</dt><dd id="statGen">—</dd>
           <dt>Tick</dt><dd id="statTick">—</dd>
+          <dt>Environment</dt><dd id="statPhase">—</dd>
           <dt>Food</dt><dd id="statFood">—</dd>
           <dt>Born</dt><dd id="statBorn">—</dd>
           <dt>Died</dt><dd id="statDied">—</dd>
@@ -502,6 +504,9 @@
       <li><b>Lineage focus</b> &mdash; select a species, specimen, or linked Notebook
       entry to locate it on the map and isolate its stable census band. Follow keeps
       the camera centred as the population moves; manual navigation releases it.</li>
+      <li><b>Field Notebook</b> &mdash; each event keeps its immediate snapshot and a
+      300-tick follow-up. Signed changes are observations after the event, not claims
+      that the event caused them.</li>
     </ul>
 
     <h3>The traits</h3>
@@ -4695,7 +4700,7 @@ void main() {
    in this file so it can be tuned without reading the simulation.
    ========================================================================== */
 
-const VERSION = '0.2.2';
+const VERSION = '0.2.3';
 
 /* ---------- Changelog ----------
    Rendered inside the About panel. Newest entry first. This is a standing commitment,
@@ -4705,6 +4710,8 @@ const VERSION = '0.2.2';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-08-02', tag:'R0 evidence', title:'Events gain an honest observation window',
+    text:'Every non-baseline Field Notebook entry now records an event snapshot and schedules a 300-tick follow-up. The follow-up reports signed changes in total and focal-lineage population, food, species count, generation, and all continuous traits while explicitly stating that change after an event is not proof of causation. Seasonal and day/night scenarios expose their current modeled phase in the Population panel and on both graph axes; seasonal labels include the exact live food-production multiplier rather than invented calendar dates. Evidence sampling and phase display consume no RNG and do not alter ecological state.' },
   { date:'2026-08-02', tag:'R0 lineage', title:'Notebook evidence now leads back to living populations',
     text:'Selecting a species, specimen, or lineage-bearing Notebook entry now centres the map on that lineage and highlights its stable identity in both the live world and census. Locate provides a one-time view; Follow continuously tracks the population’s wrap-aware centre and automatically releases when the player navigates manually. Selected organisms receive bright map haloes while other lineages dim in both 2D and 3D. The census now stores persistent lineage ids rather than mistaking display rank for ancestry. Notebook events appear as tick-aligned markers on both analytical graphs, with the selected event emphasized and explicit visible tick bounds. These views consume no RNG and do not change ecological outcomes.' },
   { date:'2026-08-02', tag:'R0 research', title:'Five paired seeds turn an anecdote into an experiment',
@@ -4918,6 +4925,7 @@ const SEASON = {
   period: 2200,            // ticks per full cycle
   amplitude: 0.55,         // food multiplier swings between (1-amp) and (1+amp)
 };
+const NOTEBOOK = { followupTicks:300 };
 // Gated by the SCENARIO's cfg.seasonal at the call site, not by a flag in here — an
 // earlier version double-gated on a global SEASON.enabled that nothing ever set,
 // which silently made every "seasonal" run identical to Temperate. Caught by
@@ -5580,7 +5588,9 @@ function notebookEvidence(lineageId){
     traits[t.key]={mean:s.mean,sd:s.sd,n:s.n};
   }
   return {
-    pop:state.organisms.length,food:state.food.length,generation:state.generation,
+    tick:state.tick,pop:state.organisms.length,
+    focalPop:lineageId==null?null:state.organisms.filter(o=>o.clade===lineageId).length,
+    food:state.food.length,generation:state.generation,
     species:viableSpeciesCount(),traits,
   };
 }
@@ -5591,6 +5601,7 @@ function recordNotebookEvent(event){
   entry.id=state.nextNotebookId++;
   if(entry.tick==null)entry.tick=state.tick;
   entry.evidence=notebookEvidence(entry.lineageId==null?null:entry.lineageId);
+  if(entry.type!=='start')entry.followupDue=entry.tick+NOTEBOOK.followupTicks;
   state.notebook.push(entry);
   if(state.notebook.length>300)state.notebook.shift();
   return entry;
@@ -5601,6 +5612,29 @@ function queueEvent(event){
   state.events.push(event);
   recordNotebookEvent(event);
   return event;
+}
+
+function updateNotebookFollowups(){
+  if(!state)return 0;
+  let completed=0;
+  for(const entry of state.notebook){
+    if(entry.followup||entry.followupDue==null||entry.followupDue>state.tick)continue;
+    entry.followup=notebookEvidence(entry.lineageId==null?null:entry.lineageId);
+    completed++;
+  }
+  return completed;
+}
+
+function environmentPhase(tick,cfg){
+  cfg=cfg||state&&state.cfg||WORLD;tick=Number(tick)||0;
+  const parts=[];
+  if(cfg.seasonal){
+    const f=((tick%SEASON.period)+SEASON.period)%SEASON.period/SEASON.period;
+    const label=f<.25?'resources rising':f<.5?'resources easing from peak':f<.75?'resources declining':'resources recovering from low';
+    parts.push(`${label} · ${seasonalMultiplier(tick).toFixed(2)}× food`);
+  }
+  if(cfg.dayNight)parts.push(isNight(tick)?'night':'day');
+  return parts.length?parts.join(' · '):'stable regime';
 }
 
 function clamp(v, lo, hi){ return v < lo ? lo : (v > hi ? hi : v); }
@@ -7032,6 +7066,7 @@ function sampleHistory(){
   // computeSpecies() is deliberately NOT called here. See sampleCensus() below —
   // this function stays cheap (O(pop)) so it can run every 30 ticks without cost.
   if (state.tick % state.censusSampleEvery === 0) sampleCensus();
+  updateNotebookFollowups();
 }
 
 /* Species/census sampling runs on its own, coarser cadence. computeSpecies() is
@@ -7735,6 +7770,9 @@ function drawTimelineEvidence(ctx,ticks,W,H){
   if(ticks&&ticks.length){
     const dpr=Math.min(2,window.devicePixelRatio||1);ctx.font=`600 ${Math.round(8*dpr)}px ui-monospace, Menlo, monospace`;
     ctx.textBaseline='bottom';ctx.fillStyle=PAL.chalkDim;ctx.fillText(`tick ${Number(ticks[0]).toLocaleString()}`,5,H-3);
+    if(state.cfg&&(state.cfg.seasonal||state.cfg.dayNight)){
+      ctx.textAlign='center';ctx.fillText(environmentPhase(state.tick,state.cfg).toUpperCase(),W/2,H-3);
+    }
     ctx.textAlign='right';ctx.fillText(`tick ${Number(ticks[ticks.length-1]).toLocaleString()}`,W-5,H-3);ctx.textAlign='left';
   }
 }
@@ -9360,28 +9398,60 @@ function selectNotebookEntry(id){
   return entry;
 }
 
+function notebookEvidenceDelta(entry){
+  const a=entry&&entry.evidence,b=entry&&entry.followup;if(!a||!b)return null;
+  const traits={};
+  for(const t of TRAITS){
+    const av=a.traits&&a.traits[t.key],bv=b.traits&&b.traits[t.key];
+    traits[t.key]=av&&bv?bv.mean-av.mean:null;
+  }
+  return {ticks:(b.tick||0)-(a.tick||0),pop:b.pop-a.pop,
+    focalPop:a.focalPop==null||b.focalPop==null?null:b.focalPop-a.focalPop,
+    food:b.food-a.food,species:b.species-a.species,generation:b.generation-a.generation,traits};
+}
+
+function signed(value,digits){
+  if(value==null||!Number.isFinite(value))return '—';
+  return `${value>0?'+':''}${value.toFixed(digits==null?0:digits)}`;
+}
+
 function notebookDetailHtml(entry){
   if(!entry)return '<p class="emptyState">Events and steward actions will accumulate here without disappearing.</p>';
   const ev=entry.evidence||{},traits=ev.traits||{};
   const traitSummary=TRAITS.slice(0,4).map(t=>`${t.label.toLowerCase()} ${fmt(traits[t.key]&&traits[t.key].mean,t.key==='sense'?1:2)}`).join(' · ');
+  const focal=ev.focalPop==null?'':`<dt>Focal lineage</dt><dd>${ev.focalPop}</dd>`;
+  let followup='';
+  if(entry.followup){
+    const after=entry.followup,delta=notebookEvidenceDelta(entry);
+    const traitDelta=TRAITS.slice(0,4).map(t=>`${t.label.toLowerCase()} ${signed(delta.traits[t.key],t.key==='sense'?1:2)}`).join(' · ');
+    followup=`<h3>Follow-up · tick ${Number(after.tick).toLocaleString()}</h3>`+
+      `<dl class="stats compact"><dt>Population</dt><dd>${after.pop}</dd>${after.focalPop==null?'':`<dt>Focal lineage</dt><dd>${after.focalPop}</dd>`}`+
+      `<dt>Species</dt><dd>${after.species}</dd><dt>Food</dt><dd>${after.food}</dd></dl>`+
+      `<p class="evidenceLine">Observed over ${delta.ticks.toLocaleString()} ticks: population ${signed(delta.pop)}, `+
+      `${delta.focalPop==null?'':`focal lineage ${signed(delta.focalPop)}, `}species ${signed(delta.species)}, food ${signed(delta.food)}; ${escHtml(traitDelta)}. `+
+      `These are changes after the event, not proof that the event caused them.</p>`;
+  }else if(entry.followupDue!=null){
+    const remaining=Math.max(0,entry.followupDue-state.tick);
+    followup=`<h3>Follow-up pending</h3><p class="evidenceLine">Scheduled at tick ${entry.followupDue.toLocaleString()} (${remaining.toLocaleString()} remaining). The later observation will show change without claiming causation.</p>`;
+  }
   return `<div class="notebookDetailHead"><span class="eventKind">${escHtml(notebookLabel(entry))}</span><b>${escHtml(entry.name||entry.key||'Event')}</b></div>`+
     `<p>${escHtml(entry.message||'Recorded observation.')}</p>${entry.detail?`<p class="spsub">${escHtml(entry.detail)}</p>`:''}`+
-    `<dl class="stats compact"><dt>Tick</dt><dd>${Number(entry.tick||0).toLocaleString()}</dd><dt>Generation</dt><dd>${ev.generation==null?'—':ev.generation}</dd>`+
-    `<dt>Population</dt><dd>${ev.pop==null?'—':ev.pop}</dd><dt>Species</dt><dd>${ev.species==null?'—':ev.species}</dd>`+
+    `<h3>Event snapshot</h3><dl class="stats compact"><dt>Tick</dt><dd>${Number(entry.tick||0).toLocaleString()}</dd><dt>Generation</dt><dd>${ev.generation==null?'—':ev.generation}</dd>`+
+    `<dt>Population</dt><dd>${ev.pop==null?'—':ev.pop}</dd>${focal}<dt>Species</dt><dd>${ev.species==null?'—':ev.species}</dd>`+
     `<dt>Food</dt><dd>${ev.food==null?'—':ev.food}</dd></dl>`+
-    `<p class="evidenceLine">Snapshot: ${escHtml(traitSummary)}. This is an association recorded at the event, not proof of cause.</p>`;
+    `<p class="evidenceLine">Snapshot: ${escHtml(traitSummary)}.</p>${followup}`;
 }
 
 function paintNotebook(){
   const list=$('notebookList'),detail=$('notebookDetail');if(!list||!detail||!state)return;
   const entries=state.notebook||[];
   if(UI.selectedNotebookId==null&&entries.length)UI.selectedNotebookId=entries[entries.length-1].id;
-  const signature=`${state.seed}|${entries.length}|${UI.selectedNotebookId}`;
+  const signature=`${state.seed}|${entries.length}|${entries.filter(e=>e.followup).length}|${UI.selectedNotebookId}`;
   if(signature!==UI.notebookSignature){
     UI.notebookSignature=signature;
     list.innerHTML=entries.slice().reverse().map(e=>`<button type="button" class="notebookEntry${e.id===UI.selectedNotebookId?' selected':''}" data-entry="${e.id}">`+
       `<span class="notebookTick">${Number(e.tick||0).toLocaleString()}</span><span><b>${escHtml(e.name||e.key||'Event')}</b>`+
-      `<small>${escHtml(notebookLabel(e))}</small></span></button>`).join('');
+      `<small>${escHtml(notebookLabel(e))}${e.followup?' · follow-up ready':''}</small></span></button>`).join('');
     if(list.querySelectorAll)for(const b of list.querySelectorAll('.notebookEntry'))b.onclick=()=>selectNotebookEntry(Number(b.getAttribute('data-entry')));
   }
   detail.innerHTML=notebookDetailHtml(entries.find(e=>e.id===UI.selectedNotebookId)||entries[entries.length-1]);
@@ -9574,6 +9644,7 @@ function paintReadouts(){
   set('statGen',  state.generation);
   set('statTick', state.tick.toLocaleString());
   set('statFood', state.food.length);
+  set('statPhase', environmentPhase(state.tick,state.cfg));
   set('statBorn', state.stats.born.toLocaleString());
   set('statDied', (state.stats.starved + state.stats.aged).toLocaleString());
 

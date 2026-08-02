@@ -619,6 +619,9 @@ function drawTimelineEvidence(ctx,ticks,W,H){
   if(ticks&&ticks.length){
     const dpr=Math.min(2,window.devicePixelRatio||1);ctx.font=`600 ${Math.round(8*dpr)}px ui-monospace, Menlo, monospace`;
     ctx.textBaseline='bottom';ctx.fillStyle=PAL.chalkDim;ctx.fillText(`tick ${Number(ticks[0]).toLocaleString()}`,5,H-3);
+    if(state.cfg&&(state.cfg.seasonal||state.cfg.dayNight)){
+      ctx.textAlign='center';ctx.fillText(environmentPhase(state.tick,state.cfg).toUpperCase(),W/2,H-3);
+    }
     ctx.textAlign='right';ctx.fillText(`tick ${Number(ticks[ticks.length-1]).toLocaleString()}`,W-5,H-3);ctx.textAlign='left';
   }
 }

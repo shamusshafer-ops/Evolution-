@@ -245,28 +245,60 @@ function selectNotebookEntry(id){
   return entry;
 }
 
+function notebookEvidenceDelta(entry){
+  const a=entry&&entry.evidence,b=entry&&entry.followup;if(!a||!b)return null;
+  const traits={};
+  for(const t of TRAITS){
+    const av=a.traits&&a.traits[t.key],bv=b.traits&&b.traits[t.key];
+    traits[t.key]=av&&bv?bv.mean-av.mean:null;
+  }
+  return {ticks:(b.tick||0)-(a.tick||0),pop:b.pop-a.pop,
+    focalPop:a.focalPop==null||b.focalPop==null?null:b.focalPop-a.focalPop,
+    food:b.food-a.food,species:b.species-a.species,generation:b.generation-a.generation,traits};
+}
+
+function signed(value,digits){
+  if(value==null||!Number.isFinite(value))return '—';
+  return `${value>0?'+':''}${value.toFixed(digits==null?0:digits)}`;
+}
+
 function notebookDetailHtml(entry){
   if(!entry)return '<p class="emptyState">Events and steward actions will accumulate here without disappearing.</p>';
   const ev=entry.evidence||{},traits=ev.traits||{};
   const traitSummary=TRAITS.slice(0,4).map(t=>`${t.label.toLowerCase()} ${fmt(traits[t.key]&&traits[t.key].mean,t.key==='sense'?1:2)}`).join(' · ');
+  const focal=ev.focalPop==null?'':`<dt>Focal lineage</dt><dd>${ev.focalPop}</dd>`;
+  let followup='';
+  if(entry.followup){
+    const after=entry.followup,delta=notebookEvidenceDelta(entry);
+    const traitDelta=TRAITS.slice(0,4).map(t=>`${t.label.toLowerCase()} ${signed(delta.traits[t.key],t.key==='sense'?1:2)}`).join(' · ');
+    followup=`<h3>Follow-up · tick ${Number(after.tick).toLocaleString()}</h3>`+
+      `<dl class="stats compact"><dt>Population</dt><dd>${after.pop}</dd>${after.focalPop==null?'':`<dt>Focal lineage</dt><dd>${after.focalPop}</dd>`}`+
+      `<dt>Species</dt><dd>${after.species}</dd><dt>Food</dt><dd>${after.food}</dd></dl>`+
+      `<p class="evidenceLine">Observed over ${delta.ticks.toLocaleString()} ticks: population ${signed(delta.pop)}, `+
+      `${delta.focalPop==null?'':`focal lineage ${signed(delta.focalPop)}, `}species ${signed(delta.species)}, food ${signed(delta.food)}; ${escHtml(traitDelta)}. `+
+      `These are changes after the event, not proof that the event caused them.</p>`;
+  }else if(entry.followupDue!=null){
+    const remaining=Math.max(0,entry.followupDue-state.tick);
+    followup=`<h3>Follow-up pending</h3><p class="evidenceLine">Scheduled at tick ${entry.followupDue.toLocaleString()} (${remaining.toLocaleString()} remaining). The later observation will show change without claiming causation.</p>`;
+  }
   return `<div class="notebookDetailHead"><span class="eventKind">${escHtml(notebookLabel(entry))}</span><b>${escHtml(entry.name||entry.key||'Event')}</b></div>`+
     `<p>${escHtml(entry.message||'Recorded observation.')}</p>${entry.detail?`<p class="spsub">${escHtml(entry.detail)}</p>`:''}`+
-    `<dl class="stats compact"><dt>Tick</dt><dd>${Number(entry.tick||0).toLocaleString()}</dd><dt>Generation</dt><dd>${ev.generation==null?'—':ev.generation}</dd>`+
-    `<dt>Population</dt><dd>${ev.pop==null?'—':ev.pop}</dd><dt>Species</dt><dd>${ev.species==null?'—':ev.species}</dd>`+
+    `<h3>Event snapshot</h3><dl class="stats compact"><dt>Tick</dt><dd>${Number(entry.tick||0).toLocaleString()}</dd><dt>Generation</dt><dd>${ev.generation==null?'—':ev.generation}</dd>`+
+    `<dt>Population</dt><dd>${ev.pop==null?'—':ev.pop}</dd>${focal}<dt>Species</dt><dd>${ev.species==null?'—':ev.species}</dd>`+
     `<dt>Food</dt><dd>${ev.food==null?'—':ev.food}</dd></dl>`+
-    `<p class="evidenceLine">Snapshot: ${escHtml(traitSummary)}. This is an association recorded at the event, not proof of cause.</p>`;
+    `<p class="evidenceLine">Snapshot: ${escHtml(traitSummary)}.</p>${followup}`;
 }
 
 function paintNotebook(){
   const list=$('notebookList'),detail=$('notebookDetail');if(!list||!detail||!state)return;
   const entries=state.notebook||[];
   if(UI.selectedNotebookId==null&&entries.length)UI.selectedNotebookId=entries[entries.length-1].id;
-  const signature=`${state.seed}|${entries.length}|${UI.selectedNotebookId}`;
+  const signature=`${state.seed}|${entries.length}|${entries.filter(e=>e.followup).length}|${UI.selectedNotebookId}`;
   if(signature!==UI.notebookSignature){
     UI.notebookSignature=signature;
     list.innerHTML=entries.slice().reverse().map(e=>`<button type="button" class="notebookEntry${e.id===UI.selectedNotebookId?' selected':''}" data-entry="${e.id}">`+
       `<span class="notebookTick">${Number(e.tick||0).toLocaleString()}</span><span><b>${escHtml(e.name||e.key||'Event')}</b>`+
-      `<small>${escHtml(notebookLabel(e))}</small></span></button>`).join('');
+      `<small>${escHtml(notebookLabel(e))}${e.followup?' · follow-up ready':''}</small></span></button>`).join('');
     if(list.querySelectorAll)for(const b of list.querySelectorAll('.notebookEntry'))b.onclick=()=>selectNotebookEntry(Number(b.getAttribute('data-entry')));
   }
   detail.innerHTML=notebookDetailHtml(entries.find(e=>e.id===UI.selectedNotebookId)||entries[entries.length-1]);
@@ -459,6 +491,7 @@ function paintReadouts(){
   set('statGen',  state.generation);
   set('statTick', state.tick.toLocaleString());
   set('statFood', state.food.length);
+  set('statPhase', environmentPhase(state.tick,state.cfg));
   set('statBorn', state.stats.born.toLocaleString());
   set('statDied', (state.stats.starved + state.stats.aged).toLocaleString());
 

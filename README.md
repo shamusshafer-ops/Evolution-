@@ -17,6 +17,9 @@ vanish with a toast. Select a species or specimen to inspect a real organism's e
 costs and life history. That selection also locates and highlights the lineage on the
 map and census; optional Follow tracks its wrap-aware population centre until the player
 navigates manually. Notebook events are tick-aligned markers on both analytical graphs.
+Each event gains a 300-tick follow-up with signed ecological and trait changes, clearly
+labelled as observation rather than causal proof. Seasonal and day/night worlds expose
+their current modeled phase and exact seasonal food multiplier.
 The **Research** card can capture Plains and Oasis at the same
 seed and tick 6,000 for an honest paired observation, or run five paired seeds itself.
 The batch reports mean differences, sample variability, standardized paired effects,

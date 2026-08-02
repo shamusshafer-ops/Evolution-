@@ -67,6 +67,14 @@ check('the multiplier troughs near 1-amplitude three-quarters in',
       Math.abs(seasonalMultiplier(3*SEASON.period/4) - (1-SEASON.amplitude)) < 0.01);
 check('the multiplier returns to 1.0 after a full cycle',
       Math.abs(seasonalMultiplier(SEASON.period) - 1) < 1e-9);
+check('static scenarios expose an honest stable-regime phase label',
+      environmentPhase(0,{seasonal:false,dayNight:false})==='stable regime');
+check('season labels expose direction and the actual food multiplier',
+      /resources easing from peak/.test(environmentPhase(SEASON.period/4,{seasonal:true}))&&
+      environmentPhase(SEASON.period/4,{seasonal:true}).includes((1+SEASON.amplitude).toFixed(2)+'× food'));
+check('day-night labels follow the model period exactly',
+      environmentPhase(0,{dayNight:true})==='day'&&
+      environmentPhase(DAYNIGHT.period/2,{dayNight:true})==='night');
 
 /* --- the seasonal scenario must actually differ from its static twin ---
    Guards specifically against the double-gating bug caught during development: an

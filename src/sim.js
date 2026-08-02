@@ -98,7 +98,9 @@ function notebookEvidence(lineageId){
     traits[t.key]={mean:s.mean,sd:s.sd,n:s.n};
   }
   return {
-    pop:state.organisms.length,food:state.food.length,generation:state.generation,
+    tick:state.tick,pop:state.organisms.length,
+    focalPop:lineageId==null?null:state.organisms.filter(o=>o.clade===lineageId).length,
+    food:state.food.length,generation:state.generation,
     species:viableSpeciesCount(),traits,
   };
 }
@@ -109,6 +111,7 @@ function recordNotebookEvent(event){
   entry.id=state.nextNotebookId++;
   if(entry.tick==null)entry.tick=state.tick;
   entry.evidence=notebookEvidence(entry.lineageId==null?null:entry.lineageId);
+  if(entry.type!=='start')entry.followupDue=entry.tick+NOTEBOOK.followupTicks;
   state.notebook.push(entry);
   if(state.notebook.length>300)state.notebook.shift();
   return entry;
@@ -119,6 +122,29 @@ function queueEvent(event){
   state.events.push(event);
   recordNotebookEvent(event);
   return event;
+}
+
+function updateNotebookFollowups(){
+  if(!state)return 0;
+  let completed=0;
+  for(const entry of state.notebook){
+    if(entry.followup||entry.followupDue==null||entry.followupDue>state.tick)continue;
+    entry.followup=notebookEvidence(entry.lineageId==null?null:entry.lineageId);
+    completed++;
+  }
+  return completed;
+}
+
+function environmentPhase(tick,cfg){
+  cfg=cfg||state&&state.cfg||WORLD;tick=Number(tick)||0;
+  const parts=[];
+  if(cfg.seasonal){
+    const f=((tick%SEASON.period)+SEASON.period)%SEASON.period/SEASON.period;
+    const label=f<.25?'resources rising':f<.5?'resources easing from peak':f<.75?'resources declining':'resources recovering from low';
+    parts.push(`${label} · ${seasonalMultiplier(tick).toFixed(2)}× food`);
+  }
+  if(cfg.dayNight)parts.push(isNight(tick)?'night':'day');
+  return parts.length?parts.join(' · '):'stable regime';
 }
 
 function clamp(v, lo, hi){ return v < lo ? lo : (v > hi ? hi : v); }
@@ -1550,6 +1576,7 @@ function sampleHistory(){
   // computeSpecies() is deliberately NOT called here. See sampleCensus() below —
   // this function stays cheap (O(pop)) so it can run every 30 ticks without cost.
   if (state.tick % state.censusSampleEvery === 0) sampleCensus();
+  updateNotebookFollowups();
 }
 
 /* Species/census sampling runs on its own, coarser cadence. computeSpecies() is

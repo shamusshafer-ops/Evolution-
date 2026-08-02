@@ -172,7 +172,7 @@
 
   /* Research and evidence tools */
   .researchCard{ border-left:2px solid var(--sense); padding-left:9px; }
-  .researchCard h3, #inspector h3{
+  .researchCard h3, #inspector h3, #notebookDetail h3{
     margin:9px 0 5px; color:var(--sense); font-size:9px; letter-spacing:.12em; text-transform:uppercase;
   }
   .researchCard p, .comparisonVerdict, .inspectNote, .evidenceLine, .emptyState{
@@ -188,6 +188,7 @@
   .compact dt, .compact dd{ font-size:10.5px; }
   .inspectHead{ display:flex; align-items:center; gap:7px; margin-bottom:7px; }
   .inspectHead span:last-child{ margin-left:auto; color:var(--chalk-dim); font-size:10px; }
+  #statPhase{ max-width:220px; color:var(--food); font-size:10px; line-height:1.35; }
   #notebookGrid{ display:grid; grid-template-columns:minmax(125px,.8fr) minmax(0,1.4fr); gap:8px; }
   #notebookList{ max-height:230px; overflow:auto; border-right:1px solid var(--rule); padding-right:7px; }
   .notebookEntry{
@@ -389,6 +390,7 @@
           <dt>Species</dt><dd id="statSpecies">—</dd>
           <dt>Generation</dt><dd id="statGen">—</dd>
           <dt>Tick</dt><dd id="statTick">—</dd>
+          <dt>Environment</dt><dd id="statPhase">—</dd>
           <dt>Food</dt><dd id="statFood">—</dd>
           <dt>Born</dt><dd id="statBorn">—</dd>
           <dt>Died</dt><dd id="statDied">—</dd>
@@ -502,6 +504,9 @@
       <li><b>Lineage focus</b> &mdash; select a species, specimen, or linked Notebook
       entry to locate it on the map and isolate its stable census band. Follow keeps
       the camera centred as the population moves; manual navigation releases it.</li>
+      <li><b>Field Notebook</b> &mdash; each event keeps its immediate snapshot and a
+      300-tick follow-up. Signed changes are observations after the event, not claims
+      that the event caused them.</li>
     </ul>
 
     <h3>The traits</h3>

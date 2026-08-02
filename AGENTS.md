@@ -39,7 +39,7 @@ cat tests/harness.js build/evo.js tests/test-NAME.js | node
 
 There is no `npm test` — the suite is 18 files, run one at a time. `tests/harness.js`
 provides the browser-free globals (`document`, `window`, etc.) that let `sim.js` run
-headless. Current files (535 checks total as of this handoff): `test-core.js`,
+headless. Current files (547 checks total as of this handoff): `test-core.js`,
 `test-niche.js`, `test-render.js`, `test-selection.js`, `test-speciation.js`,
 `test-ui.js`, `test-environment.js`, `test-predation.js`, `test-adaptations.js`,
 `test-lineage.js`, `test-learning.js`, `test-carnivory.js`,
@@ -137,6 +137,12 @@ touching a threshold, and say so in the commit message the way past commits have
   lineages highlight on the map and census. `ribbonTicks` aligns trait columns with
   Notebook markers without polluting trait-key objects. The ribbon is still a
   population-wide distribution—do not describe it as lineage-filtered history.
+- **R0 event follow-ups and environmental phases are shipped.** Each non-baseline
+  Notebook entry stores its event `evidence`, `followupDue`, and eventual `followup`.
+  The UI reports signed changes after `NOTEBOOK.followupTicks` (300), always as temporal
+  association rather than causation. `environmentPhase()` derives resource direction,
+  exact seasonal multiplier, and day/night directly from `SEASON`, `DAYNIGHT`, and the
+  scenario flags; it never invents calendar time.
 - **M1–M10 shipped and stable**: allometric traits, niche partitioning, emergent
   sympatric + allopatric speciation, environmental dynamics (shocks/seasons/
   migration), predation with a measured bistability result, discrete adaptations
@@ -216,10 +222,15 @@ touching a threshold, and say so in the commit message the way past commits have
   should prefer `row.lineages` for stable ids while retaining `row.clades` for backward
   compatibility. Timeline markers exclude the baseline and only plot events inside the
   visible tick window. Camera focus and selection highlighting must remain RNG-free.
+- Follow-ups resolve from `sampleHistory()` through `updateNotebookFollowups()`. They
+  append evidence to an existing Notebook entry; they must not create a second event,
+  toast, RNG draw, or ecological mutation. The event snapshot is the comparison
+  baseline, not a guaranteed pre-treatment control. `focalPop` is separate from global
+  `pop`, and may correctly reach zero after lineage extinction.
 
 **Next product decision:** finish R0 before starting contingent eras. The strongest next
-slice is before/after Notebook evidence plus phase labels and historical lineage-specific
-trait distributions. The research runner can later become a reusable workbench with
+slice is historical lineage-specific trait distributions so the selected census band
+and trait history describe the same population. The research runner can later become a reusable workbench with
 saved/exported protocols, configurable replicates, and additional controlled pairs. #32 then begins contingent eras:
 environmental opportunity plus a rare, lineage-specific key innovation, never a fixed
 skill-tree sequence. Timeline compression (#34) remains separate. See the design review

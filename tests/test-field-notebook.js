@@ -148,5 +148,35 @@ UI.selectedLineageId=mapLineage;UI.followLineage=false;
 check('lineage follow can be enabled for a living selected lineage',toggleLineageFollow()===true&&UI.followLineage);
 check('manual-navigation cancellation stops lineage follow',stopLineageFollow()===true&&!UI.followLineage);
 
+initWorld({seed:'followup-window',scenario:'seasonal'});triggerShock('drought');
+const pendingEvent=state.notebook.at(-1);
+check('non-baseline events schedule a fixed evidence follow-up',
+  pendingEvent.followupDue===pendingEvent.tick+NOTEBOOK.followupTicks&&!pendingEvent.followup);
+check('pending Notebook detail names the future observation without claiming causation',
+  /Follow-up pending/.test(notebookDetailHtml(pendingEvent))&&/without claiming causation/.test(notebookDetailHtml(pendingEvent)));
+for(let i=0;i<NOTEBOOK.followupTicks-1;i++)step();
+check('follow-up evidence does not resolve early',!pendingEvent.followup);
+step();
+check('follow-up evidence resolves on the first sample at or after its due tick',
+  pendingEvent.followup&&pendingEvent.followup.tick===NOTEBOOK.followupTicks);
+const observedDelta=notebookEvidenceDelta(pendingEvent);
+check('the evidence window reports signed population, food, species, and trait changes',
+  observedDelta&&Number.isFinite(observedDelta.pop)&&Number.isFinite(observedDelta.food)&&
+  Number.isFinite(observedDelta.species)&&Number.isFinite(observedDelta.traits.speed));
+check('completed Notebook detail labels changes as observation rather than cause',
+  /Follow-up · tick/.test(notebookDetailHtml(pendingEvent))&&/not proof that the event caused them/.test(notebookDetailHtml(pendingEvent)));
+
+initWorld({seed:'focal-followup',scenario:'temperate'});
+const focalId=state.clades[0].id,focalEvent=recordNotebookEvent({type:'observation',lineageId:focalId,name:'Focal check'});
+check('lineage-linked evidence records focal and global populations separately',
+  focalEvent.evidence.focalPop===state.organisms.filter(o=>o.clade===focalId).length&&focalEvent.evidence.pop===state.organisms.length);
+focalEvent.followupDue=state.tick;
+seedRng('followup-rng');const followupFirst=rnd(),followupExpectedSecond=rnd();
+seedRng('followup-rng');const followupActualFirst=rnd();updateNotebookFollowups();const followupActualSecond=rnd();
+check('resolving a follow-up consumes no simulation RNG',
+  followupActualFirst===followupFirst&&followupActualSecond===followupExpectedSecond);
+check('the baseline remains a reference rather than scheduling a follow-up',
+  state.notebook[0].type==='start'&&state.notebook[0].followupDue==null);
+
 console.log(`\n${pass}/${pass+fail} checks passed`);
 if(fail)process.exit(1);
