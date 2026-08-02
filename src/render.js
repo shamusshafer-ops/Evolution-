@@ -1,21 +1,66 @@
 /* ============================================================================
-   render.js — canvas drawing. Reads state, never mutates it.
-   Two surfaces: the specimen well (the world) and the drift ribbon (the signature).
+   render.js — shared render dispatch plus the complete Canvas fallback.
+   Reads state, never mutates it. The drift ribbon and census remain analytical 2D.
    ========================================================================== */
 
 let _well = null, _wellCtx = null, _ribbon = null, _ribbonCtx = null;
 let _view = { scale:1, baseScale:1, ox:0, oy:0 };
 let _camera = { zoom:1, cx:null, cy:null };
+let _use3D = false;
 const VIEW_MIN_ZOOM = 1, VIEW_MAX_ZOOM = 24;
 
+function getRenderBackend(){ return _use3D ? '3d' : '2d'; }
+
+/* A canvas keeps the first context family it creates. If optional 3D startup claims
+   one surface and then fails on the other, disposing WebGL does not make getContext
+   ('2d') legal again. Startup happens before UI binding, so replacing only a claimed
+   canvas is a safe, transactional route back to the complete 2D renderer. */
+function twoDCanvasFallback(canvas){
+  if(!canvas||typeof canvas.getContext!=='function')return{canvas,ctx:null};
+  let ctx=null;
+  try{ctx=canvas.getContext('2d');}catch(_err){}
+  if(ctx)return{canvas,ctx};
+  if(canvas.parentNode&&typeof canvas.cloneNode==='function'){
+    const replacement=canvas.cloneNode(true);
+    canvas.parentNode.replaceChild(replacement,canvas);
+    try{ctx=replacement.getContext('2d');}catch(_err){}
+    return{canvas:replacement,ctx};
+  }
+  return{canvas,ctx:null};
+}
+
 function initRender(){
+  _use3D=false;
   _well   = document.getElementById('well');
   _ribbon = document.getElementById('ribbon');
   if (!_well || !_ribbon) return false;
-  _wellCtx   = _well.getContext('2d');
   _ribbonCtx = _ribbon.getContext('2d');
   initCensus();
-  initCard();
+  _card = document.getElementById('specimen');
+
+  // 3D is the default when the bundled renderer and WebGL2 are available. The query
+  // switch is deliberately simple and permanent for the page lifetime: a canvas
+  // cannot change from WebGL to 2D after its first context has been created.
+  const force2D = typeof location!=='undefined' && /(?:^|[?&])renderer=2d(?:&|$)/.test(location.search||'');
+  if(!force2D && typeof initThreeRender==='function'){
+    try{ _use3D=!!initThreeRender(_well,_card); }catch(e){ _use3D=false; }
+  }
+  if(_use3D){
+    _wellCtx=null;_cardCtx=null;
+    if(typeof bindThreeSpecimenControls==='function')bindThreeSpecimenControls();
+  }else{
+    if(typeof disposeThreeRender==='function')disposeThreeRender();
+    const well2D=twoDCanvasFallback(_well),card2D=twoDCanvasFallback(_card);
+    _well=well2D.canvas;_wellCtx=well2D.ctx;
+    _card=card2D.canvas;_cardCtx=card2D.ctx;
+    if(!_wellCtx||!_cardCtx)return false;
+  }
+  if(_well&&_well.setAttribute)_well.setAttribute('aria-label',_use3D
+    ?'3D specimen world. Drag to pan; right-drag, two-finger twist, or Q and E rotates; wheel or pinch zooms.'
+    :'Specimen world. Drag to pan; wheel or pinch zooms.');
+  if(_card&&_card.setAttribute)_card.setAttribute('aria-label',_use3D
+    ?'Interactive 3D species forms. Drag or use arrow keys to rotate; wheel or plus and minus zooms; 0 resets.'
+    :'Current two-dimensional form of each species.');
   fitCanvases();
   return true;
 }
@@ -23,11 +68,13 @@ function initRender(){
 function fitCanvases(){
   if (!_well) return;
   const dpr = Math.min(window.devicePixelRatio || 1, 2); // cap: 3x DPR on phones triples fill cost
-  for (const c of [_well, _ribbon, _census, _card].filter(Boolean)){
+  const cpuCanvases=_use3D?[_ribbon,_census]:[_well,_ribbon,_census,_card];
+  for (const c of cpuCanvases.filter(Boolean)){
     const r = c.getBoundingClientRect();
     c.width  = Math.max(1, Math.round(r.width  * dpr));
     c.height = Math.max(1, Math.round(r.height * dpr));
   }
+  if(_use3D&&typeof fitThreeRender==='function')fitThreeRender();
   const cfg = state ? state.cfg : WORLD;
   _view.baseScale = Math.min(_well.width / cfg.w, _well.height / cfg.h);
   if (!Number.isFinite(_camera.cx)) _camera.cx = cfg.w / 2;
@@ -54,6 +101,7 @@ function updateViewTransform(){
 }
 
 function resetWellView(){
+  if(_use3D&&typeof resetThreeWorldView==='function'){resetThreeWorldView();return;}
   const cfg = state ? state.cfg : WORLD;
   _camera.zoom = 1;
   _camera.cx = cfg.w / 2;
@@ -62,6 +110,7 @@ function resetWellView(){
 }
 
 function panWellBy(clientDx, clientDy){
+  if(_use3D&&typeof panThreeWorldBy==='function'){panThreeWorldBy(clientDx,clientDy);return;}
   if (!_well || !_view.scale) return;
   const rect = _well.getBoundingClientRect();
   const px = clientDx * (_well.width / Math.max(1, rect.width));
@@ -72,6 +121,7 @@ function panWellBy(clientDx, clientDy){
 }
 
 function zoomWellAt(factor, clientX, clientY){
+  if(_use3D&&typeof zoomThreeWorldAt==='function'){zoomThreeWorldAt(factor,clientX,clientY);return;}
   if (!_well || !Number.isFinite(factor) || factor <= 0) return;
   const rect = _well.getBoundingClientRect();
   const ax = clientX == null ? _well.width/2 : (clientX - (rect.left||0)) * (_well.width / Math.max(1,rect.width));
@@ -394,6 +444,7 @@ function drawCreature(ctx,o,R,opts){
 }
 
 function drawWell(){
+  if(_use3D&&typeof drawThreeWorld==='function'){drawThreeWorld();return;}
   if (!_wellCtx || !state) return;
   const ctx = _wellCtx, cfg = state.cfg, s = _view.scale;
   const X = x => _view.ox + x * s;
@@ -585,9 +636,8 @@ function drawAll(){ drawWell(); drawRibbon(); drawCensus(); drawSpecimenCard(); 
    accumulated drift becomes something you can actually look at and compare against
    the same lineage twenty minutes earlier.
 
-   Draws the clade MEAN, not a sampled individual — an individual would jitter frame
-   to frame with whoever happened to be picked, which reads as noise rather than as
-   the lineage changing. */
+   Draws a stable real medoid plus real divergent variants. It never synthesises a
+   mean animal carrying a gene combination that no living individual possesses. */
 let _card = null, _cardCtx = null;
 
 function initCard(){
@@ -647,12 +697,20 @@ function fitSpecimenHeight(nClades){
   const cssH=Math.max(380,rows*300),next=cssH+'px';
   if(_card.style.height===next)return;
   _card.style.height=next;
+  if(_use3D&&typeof fitThreeRender==='function'){fitThreeRender();return;}
   const rect=_card.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);
   _card.width=Math.max(1,Math.round(rect.width*dpr));
   _card.height=Math.max(1,Math.round(rect.height*dpr));
 }
 
 function drawSpecimenCard(){
+  if(_use3D&&typeof drawThreeSpecimens==='function'){
+    if(!state)return;
+    const live=(state.clades||[]).filter(c=>c.n>=5);
+    fitSpecimenHeight(live.length);
+    drawThreeSpecimens();
+    return;
+  }
   if (!_cardCtx || !state) return;
   const clades = (state.clades || []).filter(c => c.n >= 5);
   fitSpecimenHeight(clades.length);

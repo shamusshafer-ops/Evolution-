@@ -292,6 +292,11 @@ function closeAbout(){
   if (p) p.hidden = true;
   if (b) b.hidden = true;
 }
+function blocksGlobalShortcut(e){
+  const target=e&&e.target,tag=(target&&target.tagName||'').toUpperCase();
+  return !!(e.defaultPrevented||e.repeat||e.altKey||e.ctrlKey||e.metaKey||
+    (target&&target.isContentEditable)||['INPUT','SELECT','TEXTAREA','BUTTON'].includes(tag));
+}
 function bindAbout(){
   const btn = $('btnAbout'), close = $('btnAboutClose'), backdrop = $('aboutBackdrop');
   if (btn) btn.onclick = openAbout;
@@ -307,7 +312,7 @@ function bindAbout(){
       else if (isFullscreenActive()) exitFullscreen();
     }
     // F toggles fullscreen, matching the convention of basically every media app.
-    if ((e.key === 'f' || e.key === 'F') && e.target.tagName !== 'INPUT'){ toggleFullscreen(); }
+    if ((e.key === 'f' || e.key === 'F') && !blocksGlobalShortcut(e)){ toggleFullscreen(); }
   });
 }
 
@@ -397,23 +402,25 @@ function bindFullscreen(){
 }
 
 /* ---------- Well navigation ----------
-   Pointer events cover mouse, pen, and touch with one path. One pointer drags; two
-   pointers pan and pinch around their shared midpoint. Wheel/buttons/keys call the
-   same camera helpers, so embedded and fullscreen behaviour cannot drift apart. */
+   Pointer events cover mouse, pen, and touch with one path. One pointer pans; in 3D
+   a right-drag or Q/E rotates the oblique camera. Two pointers pan, pinch, and twist
+   around their shared midpoint. Wheel/buttons/keys call the same camera helpers, so embedded
+   and fullscreen behaviour cannot drift apart. */
 function bindWellNavigation(){
   const well = $('well');
   if (!well) return;
   const pointers = new Map();
-  const point = e => ({ x:e.clientX, y:e.clientY });
+  const point = e => ({ x:e.clientX, y:e.clientY, button:e.button });
   const pairMetrics = values => {
     const p = Array.from(values).slice(0,2);
     return { x:(p[0].x+p[1].x)/2, y:(p[0].y+p[1].y)/2,
-             d:Math.hypot(p[1].x-p[0].x,p[1].y-p[0].y) };
+             d:Math.hypot(p[1].x-p[0].x,p[1].y-p[0].y),
+             a:Math.atan2(p[1].y-p[0].y,p[1].x-p[0].x) };
   };
   const repaint = () => { drawWell(); };
 
   well.addEventListener('pointerdown', e => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.pointerType === 'mouse' && e.button !== 0 && !(_use3D&&e.button===2)) return;
     pointers.set(e.pointerId, point(e));
     if (well.setPointerCapture) well.setPointerCapture(e.pointerId);
     well.classList.add('dragging');
@@ -423,13 +430,19 @@ function bindWellNavigation(){
     if (!pointers.has(e.pointerId)) return;
     const before = pointers.size >= 2 ? pairMetrics(pointers.values()) : null;
     const old = pointers.get(e.pointerId);
-    pointers.set(e.pointerId, point(e));
+    const moved=point(e);moved.button=old.button;
+    pointers.set(e.pointerId,moved);
     if (pointers.size >= 2){
       const after = pairMetrics(pointers.values());
       panWellBy(after.x-before.x, after.y-before.y);
       if (before.d > 0) zoomWellAt(after.d/before.d, after.x, after.y);
+      if(_use3D&&typeof rotateThreeWorldBy==='function'){
+        const turn=Math.atan2(Math.sin(after.a-before.a),Math.cos(after.a-before.a));
+        if(Math.abs(turn)>0.002)rotateThreeWorldBy(turn*180,0);
+      }
     } else {
-      panWellBy(e.clientX-old.x, e.clientY-old.y);
+      if(_use3D&&old.button===2&&typeof rotateThreeWorldBy==='function')rotateThreeWorldBy(e.clientX-old.x,e.clientY-old.y);
+      else panWellBy(e.clientX-old.x, e.clientY-old.y);
     }
     repaint();
     e.preventDefault();
@@ -440,6 +453,7 @@ function bindWellNavigation(){
   };
   well.addEventListener('pointerup', endPointer);
   well.addEventListener('pointercancel', endPointer);
+  well.addEventListener('contextmenu',e=>{if(_use3D)e.preventDefault();});
   well.addEventListener('wheel', e => {
     zoomWellAt(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
     repaint(); e.preventDefault();
@@ -453,6 +467,8 @@ function bindWellNavigation(){
     else if (e.key === 'ArrowDown') panWellBy(0,-pan);
     else if (e.key === '+' || e.key === '=') zoomWellAt(1.35);
     else if (e.key === '-' || e.key === '_') zoomWellAt(1/1.35);
+    else if (_use3D&&(e.key==='q'||e.key==='Q')&&typeof rotateThreeWorldBy==='function') rotateThreeWorldBy(-26,0);
+    else if (_use3D&&(e.key==='e'||e.key==='E')&&typeof rotateThreeWorldBy==='function') rotateThreeWorldBy(26,0);
     else if (e.key === '0') resetWellView();
     else return;
     repaint(); e.preventDefault();
@@ -493,8 +509,9 @@ function bindUI(){
 
   // Space toggles run — the control you reach for most, on the key nearest the thumb.
   document.addEventListener('keydown', e => {
-    if (e.code === 'Space' && e.target.tagName !== 'INPUT'){ e.preventDefault(); setRunning(!state.running); }
-    if (e.key === 'r' && e.target.tagName !== 'INPUT') restart({});
+    if (blocksGlobalShortcut(e)) return;
+    if (e.code === 'Space'){ e.preventDefault(); setRunning(!state.running); }
+    if (e.key === 'r' || e.key === 'R') restart({});
   });
 
   // A simulation left running in a background tab burns battery for nothing.

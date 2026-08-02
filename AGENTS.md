@@ -17,6 +17,7 @@ Read it before changing anything in `src/sim.js` or `src/data.js`.
 ## Build and test
 
 ```
+npm ci                    # install pinned build-time dependencies (Three.js + esbuild)
 node build.js              # rebuild build/evo.js and index.html from src/
 node build.js --check      # verify the generated artifacts match src/ (run before every commit)
 node --check build/evo.js  # syntax check on the bundle
@@ -25,14 +26,14 @@ node --check build/evo.js  # syntax check on the bundle
 cat tests/harness.js build/evo.js tests/test-NAME.js | node
 ```
 
-There is no `npm test` — the suite is 16 files, run one at a time. `tests/harness.js`
+There is no `npm test` — the suite is 17 files, run one at a time. `tests/harness.js`
 provides the browser-free globals (`document`, `window`, etc.) that let `sim.js` run
-headless. Current files (441 checks total as of this handoff): `test-core.js`,
+headless. Current files (471 checks total as of this handoff): `test-core.js`,
 `test-niche.js`, `test-render.js`, `test-selection.js`, `test-speciation.js`,
 `test-ui.js`, `test-environment.js`, `test-predation.js`, `test-adaptations.js`,
 `test-lineage.js`, `test-learning.js`, `test-carnivory.js`,
-`test-advanced-adaptations.js`, `test-radiation.js`, `test-social.js`, and
-`test-living-world.js`.
+`test-advanced-adaptations.js`, `test-radiation.js`, `test-social.js`,
+`test-living-world.js`, and `test-three-render.js`.
 (`test-species.js` existed briefly in M2/M3
 and was deleted when hardcoded species were replaced by emergent ones — if you see
 it referenced in old commit messages, that's why it's gone.)
@@ -150,6 +151,11 @@ touching a threshold, and say so in the commit message the way past commits have
   anatomy, and diet to jaws. Physical adaptations alter anatomy; behavioural genes
   use external badges/cues. Species portraits select real medoids plus real variants,
   and well zoom reaches 24×. This is rendering only and consumes no simulation RNG.
+- **Shared 3D rendering is shipped.** `render3d.js` maps the same pure phenotype into
+  detailed card rigs and instanced world anatomy; fullscreen reuses the world scene
+  and camera. Three.js is pinned and inlined at build time, so `index.html` stays
+  offline/self-contained. `?renderer=2d` selects the retained Canvas fallback. Never
+  let rendering consume `rnd()` or write to `state`; `test-three-render.js` guards it.
 
 **Next product decision:** owner-ranked #32 (eras / genuine unlock thresholds) is the
 next large game-mode slice. Follow-a-lineage (#33) and timeline compression (#34) are
@@ -165,6 +171,6 @@ sufficient) rather than assuming `git` is configured. Do not commit a token to a
 file in this repo, ever, including this one.
 
 Before pushing: `node build.js && node build.js --check`, run the full test suite
-(budget ~15-20 minutes for all 16 files individually), then push `src/`, `build/`,
+(budget ~15-20 minutes for all 17 files individually), then push `src/`, `build/`,
 `index.html`, `tests/`, and the three doc files together in one commit so the
 generated artifacts never drift from `src/` in the remote history.

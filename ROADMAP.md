@@ -271,6 +271,27 @@ frame jitter and the old synthetic majority-gene portrait, which could combine g
 that no real organism carried. Every viable species receives a full-width field-guide
 cell; the panel grows vertically rather than hiding later lineages.
 
+## Added — shared 3D phenotype views (2026-08-01)
+
+The same procedural phenotype now drives species cards, the live world, and
+fullscreen. The simulation remains planar and deterministic; height, lighting,
+camera angle, materials, and gait are presentation only.
+
+- Detailed card rigs articulate torso, skull, jaw, tail, four multi-joint limbs,
+  digits, eyes, and every physical adaptation. Each row retains its real medoid and
+  two real variants; any of the three can be focused centrally before turntable
+  rotation/zoom.
+- The world expresses the same dimensions through per-part `InstancedMesh` batches,
+  keeping a 1,400-organism world to a bounded set of draw calls while allowing each
+  instance its inherited proportions, pose, direction, and lineage colour.
+- Fullscreen resizes and reuses the world renderer, scene, and camera. Embedded and
+  fullscreen controls therefore cannot drift apart.
+- Three.js is version-pinned and bundled into the generated single-file page. There
+  are no runtime requests; `?renderer=2d` retains the complete Canvas fallback.
+
+Rendering is a read-only projection of state. A dedicated headless contract suite
+pins pure phenotype derivation, safe WebGL fallback, and zero RNG/state mutation.
+
 ### Remaining from the SPORE evaluation, in owner's ranked order
 
 1. ~~Morphology~~ — shipped here

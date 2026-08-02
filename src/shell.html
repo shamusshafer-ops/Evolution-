@@ -159,7 +159,29 @@
   .sprow.out .spname, .sprow.out .spcount{ color:var(--chalk-dim); text-decoration:line-through; }
   .spname{ flex:1; font-size:11.5px; }
   .spcount{ font-variant-numeric:tabular-nums; font-size:12px; }
-  #specimen{ width:100%; height:380px; display:block; border-radius:2px; }
+  #specimenWrap{ position:relative; width:100%; }
+  #specimen{ width:100%; height:380px; display:block; border-radius:2px; touch-action:none; cursor:grab; }
+  #specimen.dragging{ cursor:grabbing; }
+  #specimenOverlay{ position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+  .specimen3DLabel{
+    position:absolute; left:9px; right:9px; display:flex; align-items:center; gap:7px;
+    color:var(--chalk); font-size:10px; text-shadow:0 1px 3px var(--well);
+  }
+  .specimen3DLabel .name{ font-weight:700; }
+  .specimen3DLabel .meta{ margin-left:auto; color:var(--chalk-dim); }
+  .specimen3DVariants{
+    position:absolute; left:9px; right:9px; display:flex; justify-content:center;
+    align-items:center; flex-wrap:nowrap; gap:4px; pointer-events:none;
+    color:var(--chalk-dim); font-size:9px; text-shadow:0 1px 3px var(--well);
+  }
+  .specimen3DChoiceLabel{ white-space:nowrap; }
+  button.specimen3DChoice{
+    min-height:0; padding:2px 5px; font-size:8px; line-height:1.2;
+    letter-spacing:0; text-transform:none; white-space:nowrap; pointer-events:auto;
+    color:var(--chalk-dim); background:rgba(11,20,23,.82);
+  }
+  button.specimen3DChoice.selected,
+  button.specimen3DChoice[aria-pressed="true"]{ color:var(--sense); border-color:var(--sense); }
   .specimenLegend{
     display:grid; grid-template-columns:1fr; gap:4px;
     padding:7px 9px 8px; border-top:1px solid var(--medium); color:var(--chalk-dim);
@@ -168,13 +190,17 @@
   .specimenLegend strong{ color:var(--chalk); font-weight:600; }
   .legendMark{ color:var(--sense); font-size:12px; }
   .adGlyphs{ font-size:13px; letter-spacing:2px; margin-right:6px; }
-  .adGlyph{ display:inline-block; position:relative; cursor:help; }
+  .adGlyph{ display:inline-block; position:relative; padding:0 1px; cursor:help; }
   .adGlyph:focus-visible{ outline:1px solid currentColor; outline-offset:2px; border-radius:1px; }
   .adGlyph:hover::after, .adGlyph:focus-visible::after{
     content:attr(data-tip); position:absolute; z-index:12; right:0; bottom:calc(100% + 5px);
     width:190px; padding:6px 7px; border:1px solid var(--rule); border-radius:2px;
     background:var(--well); color:var(--chalk); font:10px/1.35 var(--mono);
     letter-spacing:0; text-align:left; pointer-events:none;
+  }
+  .specimen3DLabel .adGlyph:hover::after,
+  .specimen3DLabel .adGlyph:focus-visible::after{
+    top:calc(100% + 5px); bottom:auto; left:0; right:auto;
   }
   #shockActive{
     margin-top:8px; padding:8px 9px; border:1px solid var(--food); color:var(--chalk);
@@ -257,7 +283,7 @@
 <main>
   <div class="stage">
     <div id="wellWrap">
-      <canvas id="well" tabindex="0" aria-label="Specimen well: organisms foraging. Drag to pan; wheel or pinch to zoom."></canvas>
+      <canvas id="well" tabindex="0" aria-label="Specimen world: organisms foraging. Drag to pan; wheel or pinch to zoom. In 3D, right-drag, a two-finger twist, or Q and E rotates."></canvas>
       <div id="wellFlash"></div>
       <div id="wellTools" role="group" aria-label="Specimen well controls">
         <button id="btnViewRun" title="Pause simulation (Space)" aria-pressed="true">Pause</button>
@@ -329,15 +355,19 @@
     <section class="panel">
       <h2>Specimens</h2>
       <div class="body" style="padding:6px;">
-        <canvas id="specimen" aria-label="Current form of each species"></canvas>
+        <div id="specimenWrap">
+          <canvas id="specimen" tabindex="0" aria-label="Current form of each species. In 3D, drag to rotate, use the wheel to zoom, and press arrow keys or 0 to adjust the view."></canvas>
+          <div id="specimenOverlay" role="group" aria-label="Species specimen details" aria-hidden="true"></div>
+        </div>
         <div class="specimenLegend" aria-label="How to read specimen forms">
           <span><strong>Shared skeleton</strong> — one ancestral terrestrial body plan; species diverge without becoming unrelated animal groups.</span>
           <span><strong>Overall scale</strong> — inherited size. <strong>Long distal limbs + narrow stance</strong> — speed.</span>
           <span><strong>Eye/orbit size</strong> — food-sensing range. <strong>Jaw shape</strong> — long soft-food cropper to short woody-food crusher.</span>
-          <span><strong>Coloured outline</strong> — lineage identity, not skin biology. Portraits are real living organisms; the two smaller bodies show actual variation at 0.6×.</span>
+          <span><strong>Coloured accent/outline</strong> — lineage identity, not skin biology. Portraits are real living organisms; the two smaller bodies show actual variation at 0.6×.</span>
           <span><span class="legendMark">▣ ✳ ☾ ▲ ⟑ ◌ ♢</span> — plates, venom fangs, dark-adapted eyes, carnivore teeth, claws, camouflage, courtship crest.</span>
           <span><span class="legendMark">⧉ ⌂ ◒ ≈ ♥ ●</span> — external badges for pack hunting, site fidelity, late breeding, flocking, kin aid, and parental care; these are behaviours, not invented organs.</span>
           <span><span class="legendMark">↻</span> — inherited learning capacity. A live flocking halo appears only when flockmates are actually nearby.</span>
+          <span><strong>View controls</strong> — in 3D, drag a specimen to rotate it; wheel or the keyboard zooms. On the map, drag pans and right-drag, two-finger twist, or Q/E rotates. Fullscreen keeps the same camera. The 2D fallback retains pan and zoom.</span>
         </div>
       </div>
     </section>

@@ -4,7 +4,8 @@ A spatial natural-selection simulator. A founding population of identical-ish or
 forages, spends energy, reproduces with mutation, and dies. Nobody designs the outcome —
 the environment does.
 
-Open `index.html`. No build step needed to play; no dependencies, no network.
+Open `index.html`. No build step or network is needed to play; its pinned 3D runtime
+is bundled into the self-contained page.
 
 Tap the **?** button for an in-app explainer (how to read the three views, what each
 trait costs and why, which scenarios to try) and a live changelog of every change
@@ -126,6 +127,21 @@ representative plus two morphologically diverse members at 0.6× display scale, 
 polymorphism remains visible and the portrait never combines majority genes into a
 synthetic animal that may not exist.
 
+### Shared 3D phenotype
+
+The species cards, live map, and fullscreen view now use the same procedural 3D
+phenotype. Cards are interactive turntables; any real variant can be brought into the
+central full-size position, drag rotates the group, and the wheel zooms.
+The map keeps the simulation on its original plane but presents it through an oblique
+orthographic camera: drag to pan, right-drag (or Q/E) to rotate, and wheel/pinch to
+zoom. Fullscreen resizes that exact renderer rather than creating a second world, so
+camera position and orientation survive the transition.
+
+World organisms are rendered as instanced anatomical parts, while cards use complete
+articulated rigs. Both consume the same traits and adaptations and neither consumes
+simulation randomness. Append `?renderer=2d` to the URL to retain the previous 2D
+scientific renderer as a fallback.
+
 ## Predator–prey evolution
 
 The **Food Chain** scenario begins with prey only. Carnivory is a binary heritable
@@ -206,14 +222,17 @@ generator: if a run produces a surprising equilibrium, you can replay it.
 ```
 src/data.js     constants, traits, scenarios, palette   (no behaviour)
 src/sim.js      world model; pure state + tick, no DOM  (runs headless)
-src/render.js   canvas: specimen well + drift ribbon
+src/render.js   shared phenotype + 2D fallback, ribbon, and census
+src/render3d.js Three.js cards, instanced world, cameras, lighting, controls
 src/ui.js       controls and readouts
 src/main.js     boot + frame loop
 src/shell.html  page shell; build.js injects the bundle
 build.js        concatenates src/ -> build/evo.js -> index.html
 ```
 
-`index.html` and `build/evo.js` are generated. Edit `src/`, then run `node build.js`.
+`index.html` and `build/evo.js` are generated. Run `npm ci` once, edit `src/`, then
+run `node build.js`. Three.js and the build tool are pinned in `package-lock.json`;
+the generated page has no runtime dependency or network request.
 
 ## Tests
 
