@@ -995,6 +995,7 @@ function _threeUpdateSpecimenOverlay(clades){
         if(o.id===row.selectedId)choice.classList.add('selected');
         choice.addEventListener('click',()=>{
           _threeCardSelections.set(c.id,o.id);_threeLayoutCardRow(row);
+          if(typeof selectOrganism==='function')selectOrganism(o.id);
           for(const peer of variants.querySelectorAll('.specimen3DChoice')){
             const active=peer===choice;peer.classList.toggle('selected',active);peer.setAttribute('aria-pressed',String(active));
           }

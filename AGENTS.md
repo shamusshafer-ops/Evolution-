@@ -14,6 +14,17 @@ behind a per-scenario config flag so it cannot silently alter an already-measure
 result. That gating discipline is the single most important convention in this repo.
 Read it before changing anything in `src/sim.js` or `src/data.js`.
 
+## Committed product direction (2026-08-02)
+
+The long game is set on a **procedurally generated planet**. It is not an abbreviated
+history of Earth. The player role is **ecosystem steward**, with agency over habitats,
+connectivity, disturbance, restoration, and population movement—not direct trait or
+mutation selection. Earth science supplies relationships and constraints; each seed
+produces its own geography and contingent natural history. Preserve the current seeded
+scenarios as Experiment mode while Living History grows behind separate flags and
+versioned rules. The design-review section at the top of `ROADMAP.md` is the source of
+truth for the R0–R6 sequence.
+
 ## Build and test
 
 ```
@@ -26,14 +37,14 @@ node --check build/evo.js  # syntax check on the bundle
 cat tests/harness.js build/evo.js tests/test-NAME.js | node
 ```
 
-There is no `npm test` — the suite is 17 files, run one at a time. `tests/harness.js`
+There is no `npm test` — the suite is 18 files, run one at a time. `tests/harness.js`
 provides the browser-free globals (`document`, `window`, etc.) that let `sim.js` run
-headless. Current files (482 checks total as of this handoff): `test-core.js`,
+headless. Current files (505 checks total as of this handoff): `test-core.js`,
 `test-niche.js`, `test-render.js`, `test-selection.js`, `test-speciation.js`,
 `test-ui.js`, `test-environment.js`, `test-predation.js`, `test-adaptations.js`,
 `test-lineage.js`, `test-learning.js`, `test-carnivory.js`,
 `test-advanced-adaptations.js`, `test-radiation.js`, `test-social.js`,
-`test-living-world.js`, and `test-three-render.js`.
+`test-living-world.js`, `test-three-render.js`, and `test-field-notebook.js`.
 (`test-species.js` existed briefly in M2/M3
 and was deleted when hardcoded species were replaced by emergent ones — if you see
 it referenced in old commit messages, that's why it's gone.)
@@ -109,6 +120,13 @@ touching a threshold, and say so in the commit message the way past commits have
 
 ## Where things currently stand (as of this handoff)
 
+- **R0's first observability slice is shipped.** `state.notebook` durably records the
+  baseline, automatic planet events, steward interventions, adaptation births, splits,
+  merges, and extinctions with contemporaneous evidence. Species/specimen selection
+  opens a real-organism inspector backed by the exact `energyCostBreakdown()` used by
+  metabolism. The Research card captures Plains and Oasis at tick 6,000 and compares
+  only matching seeds/ticks; its single-seed result is descriptive, not an effect-size
+  estimate. Scenarios are grouped into four conceptual families.
 - **M1–M10 shipped and stable**: allometric traits, niche partitioning, emergent
   sympatric + allopatric speciation, environmental dynamics (shocks/seasons/
   migration), predation with a measured bistability result, discrete adaptations
@@ -163,20 +181,37 @@ touching a threshold, and say so in the commit message the way past commits have
   derivation. Smooth card tubes own their generated geometry and must retain the
   `ownedGeometry` disposal marker.
 
-**Next product decision:** owner-ranked #32 (eras / genuine unlock thresholds) is the
-next large game-mode slice. Follow-a-lineage (#33) and timeline compression (#34) are
-smaller alternatives. Keep science-mode scenarios reproducible whichever comes next.
+### R0 implementation invariants
+
+- Use `queueEvent()` when an occurrence belongs in both transient toasts and the durable
+  notebook. Use `recordNotebookEvent()` for evidence that should not create a toast,
+  such as the run baseline and direct steward interventions.
+- Notebook evidence collection and every inspector/render path must remain read-only and
+  must never call `rnd()`. `state.notebook` resets with a run; UI comparison captures
+  deliberately survive scenario restarts so the second treatment can be collected.
+- `energyCostBreakdown()` is the source of truth for both metabolism and the inspector.
+  Do not duplicate those formulas in UI code.
+- A comparison is currently valid only for Plains versus Oasis at tick 6,000 with the
+  same seed. It is one paired observation, not a replicate study or proof of causation.
+- Extinctions are recorded after census only once per lineage. A lineage absorbed by an
+  explicit merge is not also labelled extinct. If a selected organism dies, lineage
+  inspection falls back to a real extant representative rather than inventing one.
+
+**Next product decision:** finish R0 before starting contingent eras. The strongest next
+slice is a batch comparison runner with seed sets, treatment metadata, variability,
+effect sizes, and negative results; graph event markers and map-level lineage follow are
+the other remaining R0 work. #32 then begins contingent eras: environmental opportunity
+plus a rare, lineage-specific key innovation, never a fixed skill-tree sequence.
+Timeline compression (#34) remains separate. See the design review at the top of
+`ROADMAP.md`; keep Experiment-mode RNG and measured results reproducible.
 
 ## Pushing
 
-This container has no `git` CLI checkout — every commit in this repo's history was
-made via the GitHub REST Git Data API (blob → tree → commit → ref update) using a
-short-lived personal access token, not `git push`. If you are a fresh agent without
-that token, ask the repo owner for one scoped to this repo (`Contents: write` is
-sufficient) rather than assuming `git` is configured. Do not commit a token to any
-file in this repo, ever, including this one.
+This workspace is a normal Git checkout on `main`; inspect `git status -sb` before
+editing and preserve unrelated owner changes. Do not assume GitHub credentials are
+available, and never put a token in any file. Commit or push only when the owner asks.
 
 Before pushing: `node build.js && node build.js --check`, run the full test suite
-(budget ~15-20 minutes for all 17 files individually), then push `src/`, `build/`,
-`index.html`, `tests/`, and the three doc files together in one commit so the
+(budget ~15-20 minutes for all 18 files individually), then push `src/`, `build/`,
+`index.html`, `tests/`, and the documentation files together in one commit so the
 generated artifacts never drift from `src/` in the remote history.

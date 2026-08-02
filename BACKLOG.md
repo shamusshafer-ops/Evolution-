@@ -16,7 +16,7 @@
 |7| Trait correlation view (scatter) | Are fast organisms also small? The ribbon cannot show joint distributions | M | Backlog |
 |8| Export run history as CSV | For anyone wanting to analyse outside the tool | S | Backlog |
 |9| Pinch-zoom / pan the specimen well | At 1400 organisms individuals are hard to follow | M | **Shipped 2026-08-01** — drag, wheel/pinch/buttons/keyboard, 24× zoom, persistent fullscreen camera, and in-view Pause/Run |
-|10| Energy-cost breakdown inspector | Click an organism, see basal/travel/vision split | S | Backlog |
+|10| Energy-cost breakdown inspector | Click an organism, see basal/travel/vision split | S | **Shipped 2026-08-02** — selectable real organisms expose exact per-tick basal, travel, sensory, adaptation, and cognition costs plus life-history counters |
 |11| Mutation rate as a run parameter | Currently fixed per trait in data.js; exposing it is a strong teaching lever | S | Backlog |
 |12| Carrying-capacity readout | Population always saturates to food supply; make that visible rather than implicit | S | Backlog |
 
@@ -32,8 +32,8 @@
 |29| Name the ACTUAL new clade, not the smallest one | Fixed by #2 — the matcher records which group is genuinely new, so the toast names exact parentage | S | **Shipped 2026-07-30** |
 |30| Phylogeny view | The DATA now exists (#2 shipped: persistent ids, split/merge events with parents). This is the visualisation on top of it — a tree of who descended from whom | M | Backlog |
 |31| Morphology — draw creatures as their traits describe | Owner-ranked #1 of the SPORE evaluation. Pure rendering, no sim change | M | **Shipped 2026-07-30** |
-|32| Eras / unlock thresholds | Owner-ranked #2. Thresholds unlocking new trait axes. Riskiest item: badly done it becomes a skill tree with evolution flavouring | L | Next up |
-|33| Follow a lineage (camera + filtered UI) | Owner-ranked #3. Cheap now that lineage ids persist (M8) | M | Backlog |
+|32| Contingent eras / key innovations | Environmental opportunity plus lineage-specific developmental innovations open new trait axes; no fixed level order or guaranteed unlock | L | Planned after R0 observability |
+|33| Follow a lineage (camera + filtered UI) | Owner-ranked #3. Cheap now that lineage ids persist (M8) | M | **Partial 2026-08-02** — species/notebook selection drives a persistent lineage inspector; map camera focus and filtered graphs remain |
 |34| Compress the timeline | Owner-ranked #4. Measured: first event at ~216s at 1x; two scenarios produce none in 30k ticks | S | Backlog |
 |35| Learning / Baldwin effect | Scenario-local high-encounter/low-lethality ecology makes learning meaningful; innate wariness later overtakes learned skill across three seeds. Plasticity remains common, so the result is partial assimilation, documented honestly | L | **Shipped 2026-08-01** |
 |36| Heritable carnivory | Food Chain starts prey-only; obligate carnivores arise by mutation, inherit the role, cannot eat environmental food, and trigger a one-time emergence notification. Predator and prey guilds coexist across three measured seeds | M | **Shipped 2026-08-01** |
@@ -44,3 +44,11 @@
 |41| Detailed representative species anatomy | Replace mouse-like ovals with one scientifically coherent evolving body plan and real within-species specimens | L | **Shipped 2026-08-01** — articulated terrestrial anatomy, honest physical/behavioural mappings, real medoid + variants, 24× inspection zoom |
 |42| Shared 3D species representations | Use the same evolving anatomy in species cards, the live map, and fullscreen without changing simulation outcomes | L | **Shipped 2026-08-01** — interactive card rigs, instanced world anatomy, shared fullscreen camera, pinned offline Three.js, and 2D fallback |
 |43| Heritable cosmetic drift and organic anatomy | Make individuals visibly diverge through neutral head, body, tail, pigment, integument, pattern, and ornament genes; smooth abrupt body-part junctions | L | **Shipped 2026-08-01** — 13 RNG-isolated cosmetic loci, scales/fur/feathers/horns, cosmetic-aware real variants, continuous tapered portrait meshes, and smoothed world joints |
+|44| Field Notebook and causal inspection | Persistent events, organism energy/life history, lineage follow, paired comparisons, and honest evidence language | M | **First slice shipped 2026-08-02** — durable evidence log, real-organism inspector, scenario groups, and one same-seed/tick Plains–Oasis comparison; batch replicates and full lineage follow remain |
+|45| Valid deep-time bridge | Separate ticks, generations, and model years; validate any compressed stable-period update against the individual model | L | Roadmap R1 |
+|46| Quantitative genetics | Diploid polygenic traits, linkage, dominance, sparse pleiotropy, rare mutation, heterozygosity, inbreeding, and effective population size | L | Roadmap R2 |
+|47| Dynamic climate and geology | Coarse elevation/temperature/moisture/nutrient fields, renewable biomass, succession, uplift, erosion, rivers, and sea-level connectivity | L | Roadmap R3 |
+|48| Evolving food web | Producers through decomposers, graded trophic strategy, handling time, energy flux, probabilistic defence, and eco-evolutionary feedback | L | Roadmap R4 |
+|49| Secondary contact and hybridization | Separate preference, signal, and compatibility; test fusion, hybrid zones, reinforcement, and persistent isolation | L | Roadmap R5 |
+|50| Parasites, disease, and mutualism | Costed resistance/virulence coevolution and conserved-resource partnerships with cheating | L | After food-web foundation |
+|51| Living History campaigns | Plausible environmental/population interventions, scientific dilemmas, uncertainty, postmortems, and shareable natural histories | L | Roadmap R6 |

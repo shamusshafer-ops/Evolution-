@@ -4,7 +4,7 @@
    in this file so it can be tuned without reading the simulation.
    ========================================================================== */
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 
 /* ---------- Changelog ----------
    Rendered inside the About panel. Newest entry first. This is a standing commitment,
@@ -14,6 +14,8 @@ const VERSION = '0.1.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-08-02', tag:'R0', title:'A Field Notebook makes outcomes inspectable',
+    text:'Every run now retains an evidence-bearing history of its baseline, planetary events, steward actions, innovations, lineage splits, merges, and extinctions after their toasts disappear. Selecting a living lineage opens a real organism inspector whose energy breakdown is the exact calculation used by selection, alongside pedigree, lifetime feeding, offspring, encounters, adaptations, and traits. A guided same-seed Plains/Oasis card captures matched observations and states clearly when one run supports the prediction without treating one seed as causal proof. Scenario controls are grouped by scientific purpose. This establishes the ecosystem-steward role for a future procedurally generated planet without changing any legacy ecological trajectory or RNG draw.' },
   { date:'2026-08-01', tag:'morphology', title:'Neutral appearance genes drift through every lineage',
     text:'Every organism now carries a separate heritable cosmetic genome. Head profile, muzzle shape, shoulder line, standing height, ear size, tail length, curl and taper, pigment, pattern, horns, and integument recombine from the parents and undergo small seeded mutations without consuming the simulation RNG or changing fitness. The integument locus can produce smooth skin, scales, fur, or feather-like keratin, while ornament genes can produce horns and tail display. Specimen variants are selected across ecological and cosmetic morphology so within-species drift stays visible. Organic tapered meshes and buried junctions replace abrupt cylinder-to-ellipsoid joins, especially from pelvis into tail.' },
   { date:'2026-08-01', tag:'3D', title:'One living phenotype across every view',

@@ -133,7 +133,10 @@
   button.primary{ flex:1; }
   .chip{ padding:7px 10px; font-size:11px; text-transform:none; letter-spacing:.02em; }
   .chip.on{ border-color:var(--food); color:var(--food); }
-  #scenarios{ display:flex; flex-wrap:wrap; gap:6px; }
+  #scenarios{ display:flex; flex-direction:column; gap:8px; }
+  .scenarioGroup{ display:flex; flex-direction:column; gap:4px; }
+  .scenarioGroupLabel{ color:var(--chalk-dim); font-size:9px; letter-spacing:.13em; text-transform:uppercase; }
+  .scenarioChoices{ display:flex; flex-wrap:wrap; gap:6px; }
   #scenarioBlurb{ margin-top:8px; color:var(--chalk-dim); font-size:11px; line-height:1.5; }
 
   input[type=text]{
@@ -159,6 +162,45 @@
   .sprow.out .spname, .sprow.out .spcount{ color:var(--chalk-dim); text-decoration:line-through; }
   .spname{ flex:1; font-size:11.5px; }
   .spcount{ font-variant-numeric:tabular-nums; font-size:12px; }
+  button.speciesSelect{
+    width:100%; min-height:0; margin:0; color:inherit; background:transparent;
+    border:0; border-bottom:1px solid var(--medium); border-radius:0;
+    text-transform:none; letter-spacing:normal; text-align:left; font-family:inherit;
+  }
+  button.speciesSelect:hover, button.speciesSelect.selected{ background:var(--medium); }
+  button.speciesSelect.selected{ box-shadow:inset 2px 0 0 var(--sense); }
+
+  /* Research and evidence tools */
+  .researchCard{ border-left:2px solid var(--sense); padding-left:9px; }
+  .researchCard h3, #inspector h3{
+    margin:9px 0 5px; color:var(--sense); font-size:9px; letter-spacing:.12em; text-transform:uppercase;
+  }
+  .researchCard p, .comparisonVerdict, .inspectNote, .evidenceLine, .emptyState{
+    margin:5px 0; color:var(--chalk-dim); font-size:10.5px; line-height:1.45;
+  }
+  #comparisonResults{ margin-top:8px; }
+  #comparisonResults p{ margin:3px 0; font-size:10.5px; }
+  .compact{ gap:2px 8px; }
+  .compact dt, .compact dd{ font-size:10.5px; }
+  .inspectHead{ display:flex; align-items:center; gap:7px; margin-bottom:7px; }
+  .inspectHead span:last-child{ margin-left:auto; color:var(--chalk-dim); font-size:10px; }
+  #notebookGrid{ display:grid; grid-template-columns:minmax(125px,.8fr) minmax(0,1.4fr); gap:8px; }
+  #notebookList{ max-height:230px; overflow:auto; border-right:1px solid var(--rule); padding-right:7px; }
+  .notebookEntry{
+    width:100%; min-height:0; display:grid; grid-template-columns:auto 1fr; gap:7px;
+    padding:6px; border:0; border-bottom:1px solid var(--rule); border-radius:0;
+    text-transform:none; letter-spacing:normal; text-align:left; background:transparent;
+  }
+  .notebookEntry:hover, .notebookEntry.selected{ background:var(--well); }
+  .notebookEntry.selected{ box-shadow:inset 2px 0 0 var(--food); }
+  .notebookEntry b{ display:block; font-size:10px; color:var(--chalk); }
+  .notebookEntry small{ display:block; color:var(--chalk-dim); font-size:8.5px; }
+  .notebookTick{ color:var(--sense); font-size:9px; font-variant-numeric:tabular-nums; }
+  .notebookDetailHead{ display:flex; flex-direction:column; gap:3px; }
+  .notebookDetailHead b{ font-size:11px; }
+  .eventKind{ color:var(--food); font-size:8.5px; letter-spacing:.1em; text-transform:uppercase; }
+  #notebookDetail p{ margin:6px 0; font-size:10.5px; line-height:1.45; }
+  @media (max-width:520px){ #notebookGrid{ grid-template-columns:1fr; } #notebookList{ border-right:0; border-bottom:1px solid var(--rule); } }
   #specimenWrap{ position:relative; width:100%; }
   #specimen{ width:100%; height:380px; display:block; border-radius:2px; touch-action:none; cursor:grab; }
   #specimen.dragging{ cursor:grabbing; }
@@ -353,6 +395,40 @@
     </section>
 
     <section class="panel">
+      <h2>Research — controlled comparison</h2>
+      <div class="body researchCard">
+        <h3>Food distribution</h3>
+        <p>Open Plains and Oasis have the same total food supply. Only its spatial
+        distribution differs. Prediction: scattered food favours speed; persistent
+        stands favour sensing range.</p>
+        <div class="row">
+          <button id="btnExperimentPlains" class="chip">Run Plains</button>
+          <button id="btnExperimentOasis" class="chip">Run Oasis</button>
+          <button id="btnCaptureComparison" class="chip">Capture at 6k</button>
+        </div>
+        <div id="comparisonResults" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Field Notebook</h2>
+      <div class="body">
+        <div id="notebookGrid">
+          <div id="notebookList" aria-label="Recorded natural history"></div>
+          <div id="notebookDetail" aria-live="polite"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Organism Inspector</h2>
+      <div class="body" id="inspector">
+        <p class="emptyState">Select a living species or specimen to inspect its real
+        costs and history.</p>
+      </div>
+    </section>
+
+    <section class="panel">
       <h2>Specimens</h2>
       <div class="body" style="padding:6px;">
         <div id="specimenWrap">
@@ -407,9 +483,10 @@
 
     <h3>Reading the screen</h3>
     <ul>
-      <li><b>Specimen well</b> (top) &mdash; organisms as coloured dots. Colour is
-      emergent species (clade), largest population first. Species are not designed
-      in; they're derived from who can still interbreed.</li>
+      <li><b>Specimen well</b> (top) &mdash; real simulated organisms rendered from
+      their inherited traits and anatomy. Bright lineage colour identifies emergent
+      species. Species are not designed in; they're derived from who can still
+      interbreed.</li>
       <li><b>Census strip</b> &mdash; population by species over time. A new coloured
       band appearing is a speciation event happening live.</li>
       <li><b>Drift ribbon</b> &mdash; each trait's distribution across the
@@ -418,8 +495,9 @@
     </ul>
 
     <h3>The traits</h3>
-    <p>Four heritable traits. Three are priced by real biology, not numbers picked
-    to feel balanced:</p>
+    <p>Six continuous heritable traits. Their relationships range from empirical
+    allometry to explicit mechanistic abstractions; coefficients are tuned for this
+    model rather than presented as universal constants:</p>
     <ul>
       <li><b>Speed</b> &mdash; costs mass &times; speed&sup2; (kinetic)</li>
       <li><b>Size</b> &mdash; costs mass<sup>0.75</sup>, Kleiber's law: real
@@ -428,7 +506,16 @@
       tissue</li>
       <li><b>Diet</b> &mdash; which of two resources an organism digests; no
       metabolic cost, the price is opportunity, what it can't eat</li>
+      <li><b>Wariness</b> &mdash; inherited escape ability available from birth</li>
+      <li><b>Plasticity</b> &mdash; costly capacity to learn from survived predator
+      encounters; acquired skill itself is not inherited</li>
     </ul>
+
+    <h3>Your role</h3>
+    <p>You are an ecosystem steward, not a designer of organisms. You may change
+    pressures and environments; mutation remains undirected and the population decides
+    which inherited variants survive. The longer Living History game will take place on
+    a procedural planet with its own geography and contingent natural history.</p>
 
     <h3>How evolution happens here</h3>
     <p>Reproduction is sexual: two parents, real per-trait recombination (not a
@@ -4598,7 +4685,7 @@ void main() {
    in this file so it can be tuned without reading the simulation.
    ========================================================================== */
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 
 /* ---------- Changelog ----------
    Rendered inside the About panel. Newest entry first. This is a standing commitment,
@@ -4608,6 +4695,8 @@ const VERSION = '0.1.0';
    it. Entries below are backfilled from ROADMAP.md's real measured findings, not
    padded to look more eventful than the work was. */
 const CHANGELOG = [
+  { date:'2026-08-02', tag:'R0', title:'A Field Notebook makes outcomes inspectable',
+    text:'Every run now retains an evidence-bearing history of its baseline, planetary events, steward actions, innovations, lineage splits, merges, and extinctions after their toasts disappear. Selecting a living lineage opens a real organism inspector whose energy breakdown is the exact calculation used by selection, alongside pedigree, lifetime feeding, offspring, encounters, adaptations, and traits. A guided same-seed Plains/Oasis card captures matched observations and states clearly when one run supports the prediction without treating one seed as causal proof. Scenario controls are grouped by scientific purpose. This establishes the ecosystem-steward role for a future procedurally generated planet without changing any legacy ecological trajectory or RNG draw.' },
   { date:'2026-08-01', tag:'morphology', title:'Neutral appearance genes drift through every lineage',
     text:'Every organism now carries a separate heritable cosmetic genome. Head profile, muzzle shape, shoulder line, standing height, ear size, tail length, curl and taper, pigment, pattern, horns, and integument recombine from the parents and undergo small seeded mutations without consuming the simulation RNG or changing fitness. The integument locus can produce smooth skin, scales, fur, or feather-like keratin, while ornament genes can produce horns and tail display. Specimen variants are selected across ecological and cosmetic morphology so within-species drift stays visible. Organic tapered meshes and buried junctions replace abrupt cylinder-to-ellipsoid joins, especially from pelvis into tail.' },
   { date:'2026-08-01', tag:'3D', title:'One living phenotype across every view',
@@ -5446,6 +5535,9 @@ function makeState(opts){
     nextLineageId: 0,      // monotonic; a lineage id is never reused, so ancestry stays unambiguous
     lineageOf: new Map(),  // organism id -> lineage id, as of the last computeSpecies() call
     events: [],            // queued notifications for the UI to drain (speciation, etc.)
+    notebook: [],          // persistent, evidence-bearing natural history for this run
+    nextNotebookId: 1,
+    extinctLineages: new Set(), // prevents duplicate extinction records
     adaptationsSeen: {},   // one-time emergence notifications, reset with each run
     environmentHistory: [],// automatic Living World events, retained for replay/testing
     nextEnvironmentEvent: null,
@@ -5459,6 +5551,41 @@ function makeState(opts){
     sampleEvery: 30,
     censusSampleEvery: 240,  // 8x coarser than sampleEvery -- see sampleCensus()
   };
+}
+
+/* ---------- Field Notebook ----------
+   Notifications are transient attention cues; notebook entries are the durable
+   evidence trail. A notebook snapshot records what the model knew at the event,
+   without asserting that the event caused the observed state. These helpers are
+   deliberately read-only apart from appending to the two history arrays. */
+function notebookEvidence(lineageId){
+  const traits={};
+  for(const t of TRAITS){
+    const s=lineageId==null?traitStats(t.key):cladeTraitStats(lineageId,t.key);
+    traits[t.key]={mean:s.mean,sd:s.sd,n:s.n};
+  }
+  return {
+    pop:state.organisms.length,food:state.food.length,generation:state.generation,
+    species:viableSpeciesCount(),traits,
+  };
+}
+
+function recordNotebookEvent(event){
+  if(!state||!event)return null;
+  const entry=Object.assign({},event);
+  entry.id=state.nextNotebookId++;
+  if(entry.tick==null)entry.tick=state.tick;
+  entry.evidence=notebookEvidence(entry.lineageId==null?null:entry.lineageId);
+  state.notebook.push(entry);
+  if(state.notebook.length>300)state.notebook.shift();
+  return entry;
+}
+
+function queueEvent(event){
+  if(!state||!event)return null;
+  state.events.push(event);
+  recordNotebookEvent(event);
+  return event;
 }
 
 function clamp(v, lo, hi){ return v < lo ? lo : (v > hi ? hi : v); }
@@ -5513,13 +5640,23 @@ function cosmeticGenomeFor(o){
 /* mass ∝ size³ — volume scaling. Used by every cost term. */
 function massOf(o){ return METAB.massCoef * o.size * o.size * o.size; }
 
-/* Per-tick energy burn. See METAB in data.js for why these exponents. */
-function metabolicCost(o){
+/* Pure per-tick energy accounting for the inspector and the simulation. Keeping one
+   shared calculation prevents the UI from presenting a cost different from the one
+   selection actually charges. Reading it never advances RNG or changes state. */
+function energyCostBreakdown(o){
   const m = massOf(o);
   const basal  = METAB.basalCoef  * Math.pow(m, METAB.basalExp);
   const travel = METAB.travelCoef * m * o.speed * o.speed;
-  const vision = METAB.visionCoef * o.sense * o.sense;
-  return basal + travel + vision + adaptationCost(o) + cognitionCost(o);
+  const sensory = METAB.visionCoef * o.sense * o.sense;
+  const adaptations = adaptationCost(o);
+  const cognition = cognitionCost(o);
+  return { basal, travel, sensory, adaptations, cognition,
+           total:basal+travel+sensory+adaptations+cognition };
+}
+
+/* Per-tick energy burn. See METAB in data.js for why these exponents. */
+function metabolicCost(o){
+  return energyCostBreakdown(o).total;
 }
 
 /* Neural upkeep. Charged only where learning is enabled, so cognitive traits are
@@ -5624,6 +5761,7 @@ function makeOrganism(x, y, traits, gen, adapt, cosmetic){
     energy: 0,
     target: null,
     eaten: 0,
+    offspring: 0,
   };
   for (const t of TRAITS){
     o[t.key] = clamp(traits && traits[t.key] != null ? traits[t.key] : t.init, t.min, t.max);
@@ -5728,6 +5866,10 @@ function initWorld(opts){
 
   sampleHistory();
   if(state.cfg.stochasticEnvironment) scheduleEnvironmentEvent();
+  const scName=sc?sc.name:state.scenario;
+  recordNotebookEvent({type:'start',name:`${scName} run began`,
+    message:'Initial population and environment recorded as the comparison baseline.',
+    detail:`seed ${state.seed}`});
   return state;
 }
 
@@ -5914,6 +6056,8 @@ function reproduceSexual(a, b){
   child.energy = giveA + giveB + careEnergy;
   child.dir = rnd() * Math.PI * 2;
   state.organisms.push(child);
+  a.offspring=(a.offspring||0)+1;
+  b.offspring=(b.offspring||0)+1;
   detectAdaptationEmergence(child, a);
   state.stats.born++;
   if (child.gen > state.generation) state.generation = child.gen;
@@ -5930,9 +6074,10 @@ function reproduceSexual(a, b){
 
    `cull` is different in kind: it is instantaneous population mortality, not an
    environmental patch, and is applied once at trigger time rather than held open. */
-function triggerShock(id){
+function triggerShock(id, source){
   const def = SHOCKS_BY_ID[id];
   if (!def) return false;
+  source=source||'steward';
   if (def.cullFraction != null){
     const n = Math.floor(state.organisms.length * def.cullFraction);
     // Indiscriminate of trait value — this is drift, not selection, and the whole
@@ -5943,6 +6088,9 @@ function triggerShock(id){
     }
     state.stats.culled = (state.stats.culled || 0) + n;
     computeSpecies();
+    if(source==='steward')recordNotebookEvent({
+      type:'intervention',name:def.name,message:def.blurb,detail:`${n} organisms lost`,
+    });
     return true;
   }
   if (def.patch){
@@ -5962,7 +6110,10 @@ function triggerShock(id){
     for (const k in def.patch) snapshot[k] = state.cfg[k];
     Object.assign(state.cfg, def.patch);
     state.activeShocks = state.activeShocks || [];
-    state.activeShocks.push({ id, name:def.name, until: state.tick + def.duration, snapshot });
+    state.activeShocks.push({ id, name:def.name, until: state.tick + def.duration, snapshot, source });
+    if(source==='steward')recordNotebookEvent({
+      type:'intervention',name:def.name,message:def.blurb,detail:`${def.duration} ticks`,
+    });
   }
   return true;
 }
@@ -5988,7 +6139,7 @@ function applyLivingWorldEvent(key){
   const def=LIVING_EVENT_BY_KEY[key]; if(!def) return false;
   let detail='';
   if(key==='drought'||key==='bloom'){
-    if(!triggerShock(key)) return false;
+    if(!triggerShock(key,'planet')) return false;
     detail=`${SHOCKS_BY_ID[key].duration} ticks`;
   }else if(key==='dieoff'){
     const n=Math.floor(state.organisms.length*LIVING_WORLD.dieoffFraction);
@@ -6017,8 +6168,8 @@ function applyLivingWorldEvent(key){
   }
   const record={tick:state.tick,key,name:def.name,detail};
   state.environmentHistory.push(record);
-  state.events.push({type:'environment',tick:state.tick,key,name:def.name,
-                     color:def.color,message:def.message,detail});
+  queueEvent({type:'environment',tick:state.tick,key,name:def.name,
+              color:def.color,message:def.message,detail});
   return true;
 }
 
@@ -6256,6 +6407,31 @@ function traitHistogram(key, bins){
   return out;
 }
 
+function organismById(id){
+  if(!state)return null;
+  for(const o of state.organisms)if(o.id===id)return o;
+  return null;
+}
+
+/* A real organism closest to its lineage's ecological trait centroid. The inspector
+   and lineage list use an extant individual, never a synthetic average. */
+function representativeOrganismForLineage(lineageId){
+  if(!state)return null;
+  const clade=(state.clades||[]).find(c=>c.id===lineageId);
+  const members=state.organisms.filter(o=>o.clade===lineageId);
+  if(!members.length)return null;
+  if(!clade||!clade.traits)return members[0];
+  let best=members[0],bestD=Infinity;
+  for(const o of members){
+    let d=0;
+    for(const t of SPECIATION_TRAITS){
+      const z=(o[t.key]-clade.traits[t.key])/(t.max-t.min);d+=z*z;
+    }
+    if(d<bestD){bestD=d;best=o;}
+  }
+  return best;
+}
+
 /* ---------- Predation ----------
    Runs only when cfg.predation is set. Spatially indexed over the whole population
    the same way matingPass indexes breeders — a naive pairwise scan would be O(n^2)
@@ -6457,10 +6633,11 @@ function detectAdaptationEmergence(child, parent){
     if (def.enabledBy && !state.cfg[def.enabledBy]) continue;
     if (state.adaptationsSeen[def.key]) continue;
     state.adaptationsSeen[def.key] = true;
-    state.events.push({
+    const lineageId=parent && parent.clade != null ? parent.clade : child.clade;
+    queueEvent({
       type:'adaptation', tick:state.tick, key:def.key, name:def.name,
       glyph:def.glyph, color:def.color, message:def.emergence || 'has appeared.',
-      lineage:cladeName(parent && parent.clade != null ? parent.clade : child.clade),
+      lineage:cladeName(lineageId),lineageId,organismId:child.id,
     });
   }
 }
@@ -6810,7 +6987,18 @@ function sampleHistory(){
    coarser, and that coarseness is imperceptible at the timescale the phenomenon
    itself operates on. */
 function sampleCensus(){
+  const prior=new Map((state.clades||[]).filter(c=>c.n>=5).map(c=>[c.id,c.n]));
   computeSpecies();   // emergent species are derived, so they must be recomputed, not stored
+  const current=new Set((state.clades||[]).map(c=>c.id));
+  const mergedAway=new Set();
+  for(const c of (state.clades||[]))if(c.event==='merge')for(const id of (c.from||[]))mergedAway.add(id);
+  for(const [id,n] of prior){
+    if(current.has(id)||mergedAway.has(id)||state.extinctLineages.has(id))continue;
+    state.extinctLineages.add(id);
+    recordNotebookEvent({type:'extinction',name:`${cladeName(id)} went extinct`,
+      lineage:cladeName(id),lineageId:id,detail:`last viable census: ${n} organisms`,
+      message:'No living members remain. This records disappearance, not a single inferred cause.'});
+  }
   const cen = { tick: state.tick, clades: (state.clades||[]).map(c=>c.n), nClades: viableSpeciesCount() };
   state.census.push(cen);
   if (state.census.length > 260) state.census.shift();
@@ -6835,20 +7023,24 @@ function detectSpeciation(){
   for (const c of (state.clades || [])){
     if (c.n < 5) continue;                       // ignore unviable noise
     if (c.event === 'split' || c.event === 'new'){
-      state.events.push({
+      queueEvent({
         type: 'speciation',
         tick: state.tick,
         name: cladeName(c.id),
         parent: (c.from && c.from.length) ? cladeName(c.from[0]) : null,
+        lineageId:c.id,
+        parentId:(c.from && c.from.length) ? c.from[0] : null,
         n: c.n,
         totalSpecies: viableSpeciesCount(),
       });
     } else if (c.event === 'merge'){
-      state.events.push({
+      queueEvent({
         type: 'merge',
         tick: state.tick,
         name: cladeName(c.id),
         absorbed: (c.from || []).map(cladeName),
+        lineageId:c.id,
+        absorbedIds:(c.from||[]).slice(),
         n: c.n,
         totalSpecies: viableSpeciesCount(),
       });
@@ -8713,6 +8905,7 @@ function _threeUpdateSpecimenOverlay(clades){
         if(o.id===row.selectedId)choice.classList.add('selected');
         choice.addEventListener('click',()=>{
           _threeCardSelections.set(c.id,o.id);_threeLayoutCardRow(row);
+          if(typeof selectOrganism==='function')selectOrganism(o.id);
           for(const peer of variants.querySelectorAll('.specimen3DChoice')){
             const active=peer===choice;peer.classList.toggle('selected',active);peer.setAttribute('aria-pressed',String(active));
           }
@@ -8782,7 +8975,10 @@ function bindThreeSpecimenControls(){
    are the ones the player asked for (start/pause/reset/scenario/speed).
    ========================================================================== */
 
-const UI = { els:{}, lastPaint:0, autoPaused:false, cssFullscreen:false };
+const UI = { els:{}, lastPaint:0, autoPaused:false, cssFullscreen:false,
+  selectedOrganismId:null, selectedLineageId:null, selectedNotebookId:null,
+  notebookSignature:'', comparisonRuns:{plains:null,oasis:null} };
+const COMPARISON_TICK=6000;
 
 function $(id){ return document.getElementById(id); }
 
@@ -8790,14 +8986,27 @@ function buildScenarioButtons(){
   const host = $('scenarios');
   if (!host) return;
   host.innerHTML = '';
-  for (const sc of SCENARIOS){
-    const b = document.createElement('button');
-    b.className = 'chip' + (sc.id === state.scenario ? ' on' : '');
-    b.textContent = sc.name;
-    b.title = sc.blurb;
-    b.setAttribute('aria-pressed', String(sc.id === state.scenario));
-    b.onclick = () => restart({ scenario: sc.id, seed: $('seed').value.trim() || 'origin' });
-    host.appendChild(b);
+  const groups=[
+    ['Foundations',['temperate','plains','oasis','famine','glut','mono','seasonal']],
+    ['Speciation',['archipelago','radiation']],
+    ['Coevolution',['nocturne','wild','predation','foodchain','armsrace','social','baldwin']],
+    ['Living worlds',['livingworld']],
+  ];
+  for(const [label,ids] of groups){
+    const group=document.createElement('div');group.className='scenarioGroup';
+    const head=document.createElement('div');head.className='scenarioGroupLabel';head.textContent=label;group.appendChild(head);
+    const choices=document.createElement('div');choices.className='scenarioChoices';group.appendChild(choices);
+    for(const id of ids){
+      const sc=SCENARIOS.find(s=>s.id===id);if(!sc)continue;
+      const b = document.createElement('button');
+      b.className = 'chip' + (sc.id === state.scenario ? ' on' : '');
+      b.textContent = sc.name;
+      b.title = sc.blurb;
+      b.setAttribute('aria-pressed', String(sc.id === state.scenario));
+      b.onclick = () => restart({ scenario: sc.id, seed: $('seed').value.trim() || 'origin' });
+      choices.appendChild(b);
+    }
+    host.appendChild(group);
   }
   const cur = SCENARIOS.find(s => s.id === state.scenario);
   if (cur && $('scenarioBlurb')) $('scenarioBlurb').textContent = cur.blurb;
@@ -8851,15 +9060,18 @@ function paintSpecies(){
         }
       }
     }
-    html += '<div class="sprow">' +
+    html += `<button type="button" class="sprow speciesSelect${UI.selectedLineageId===c.id?' selected':''}" data-lineage="${c.id}" aria-label="Inspect ${cladeName(c.id)} lineage">` +
       `<span class="dot" style="background:${cladeColor(c.id)}"></span>` +
       `<span class="spname">${cladeName(c.id)}` +
         `<span class="spsub">spd ${c.traits.speed.toFixed(2)} \u00b7 sns ${c.traits.sense.toFixed(0)} \u00b7 sz ${c.traits.size.toFixed(2)}</span>` +
       '</span>' +
       `<span class="adGlyphs">${glyphs}</span>` +
-      `<span class="spcount">${c.n}</span></div>`;
+      `<span class="spcount">${c.n}</span></button>`;
   }
   host.innerHTML = html;
+  if(host.querySelectorAll)for(const row of host.querySelectorAll('.speciesSelect')){
+    row.onclick=()=>selectLineage(Number(row.getAttribute('data-lineage')));
+  }
 }
 
 function buildSpeciesList(){ paintSpecies(); }
@@ -8877,7 +9089,7 @@ function buildShockButtons(){
     b.className = 'chip';
     b.textContent = sh.name;
     b.title = sh.blurb;
-    b.onclick = () => { triggerShock(sh.id); paintShocks(); };
+    b.onclick = () => { triggerShock(sh.id); paintShocks(); paintNotebook(); };
     host.appendChild(b);
   }
 }
@@ -8904,6 +9116,140 @@ function paintShocks(){
 }
 
 function fmt(n, d){ return (n==null||!isFinite(n)) ? '—' : n.toFixed(d==null?2:d); }
+
+function escHtml(value){
+  return String(value==null?'':value).replace(/[&<>"']/g,ch=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  })[ch]);
+}
+
+function selectOrganism(id){
+  const o=organismById(Number(id));
+  UI.selectedOrganismId=o?o.id:Number(id);
+  if(o)UI.selectedLineageId=o.clade;
+  paintInspector();paintSpecies();
+  return o;
+}
+
+function selectLineage(id){
+  UI.selectedLineageId=Number(id);
+  const o=representativeOrganismForLineage(UI.selectedLineageId);
+  UI.selectedOrganismId=o?o.id:null;
+  paintInspector();paintSpecies();
+  return o;
+}
+
+function inspectorHtml(o){
+  if(!o)return '<p class="emptyState">Select a living species or specimen to inspect its real costs and history.</p>';
+  const cost=energyCostBreakdown(o);
+  const traitRows=TRAITS.map(t=>`<dt>${escHtml(t.label)}</dt><dd>${fmt(o[t.key],t.key==='sense'?1:2)}</dd>`).join('');
+  const active=ADAPTATIONS.filter(a=>o.ad&&o.ad[a.key]).map(a=>a.name);
+  const side=state.cfg.twoPatches?(o.homePatch===0?'west':'east'):'not divided';
+  return `<div class="inspectHead"><span class="dot" style="background:${cladeColor(o.clade)}"></span>`+
+    `<b>${escHtml(cladeName(o.clade))} #${o.id}</b><span>generation ${o.gen}</span></div>`+
+    `<dl class="stats compact"><dt>Energy</dt><dd>${fmt(o.energy,1)}</dd><dt>Age</dt><dd>${o.age} ticks</dd>`+
+    `<dt>Food eaten</dt><dd>${o.eaten||0}</dd><dt>Offspring</dt><dd>${o.offspring||0}</dd>`+
+    `<dt>Escapes</dt><dd>${o.escapes||0}</dd><dt>Kills</dt><dd>${o.kills||0}</dd>`+
+    `<dt>Birth patch</dt><dd>${side}</dd><dt>Parents</dt><dd>${o.parents&&o.parents.length?o.parents.join(' · '):'founder'}</dd></dl>`+
+    `<h3>Per-tick energy costs</h3><dl class="stats compact"><dt>Basal</dt><dd>${fmt(cost.basal,3)}</dd>`+
+    `<dt>Travel</dt><dd>${fmt(cost.travel,3)}</dd><dt>Sensory</dt><dd>${fmt(cost.sensory,3)}</dd>`+
+    `<dt>Adaptations</dt><dd>${fmt(cost.adaptations,3)}</dd><dt>Cognition</dt><dd>${fmt(cost.cognition,3)}</dd>`+
+    `<dt>Total</dt><dd>${fmt(cost.total,3)}</dd></dl><h3>Inherited phenotype</h3>`+
+    `<dl class="stats compact">${traitRows}</dl><p class="inspectNote"><b>Adaptations:</b> ${active.length?escHtml(active.join(', ')):'none'}. `+
+    `Learned escape skill ${fmt(o.learned||0,3)} is acquired within this lifetime and is not inherited.</p>`;
+}
+
+function paintInspector(){
+  const host=$('inspector');if(!host||!state)return;
+  let o=UI.selectedOrganismId==null?null:organismById(UI.selectedOrganismId);
+  if(!o&&UI.selectedLineageId!=null)o=representativeOrganismForLineage(UI.selectedLineageId);
+  if(o)UI.selectedOrganismId=o.id;
+  host.innerHTML=inspectorHtml(o);
+}
+
+function notebookLabel(entry){
+  if(entry.type==='start')return 'Baseline';
+  if(entry.type==='intervention')return 'Steward action';
+  if(entry.type==='environment')return 'Planet event';
+  if(entry.type==='adaptation')return 'Innovation';
+  if(entry.type==='speciation')return 'Lineage split';
+  if(entry.type==='merge')return 'Lineage merge';
+  if(entry.type==='extinction')return 'Extinction';
+  return 'Observation';
+}
+
+function selectNotebookEntry(id){
+  UI.selectedNotebookId=Number(id);
+  const entry=(state.notebook||[]).find(e=>e.id===UI.selectedNotebookId);
+  if(entry&&entry.lineageId!=null)selectLineage(entry.lineageId);
+  paintNotebook();
+  return entry;
+}
+
+function notebookDetailHtml(entry){
+  if(!entry)return '<p class="emptyState">Events and steward actions will accumulate here without disappearing.</p>';
+  const ev=entry.evidence||{},traits=ev.traits||{};
+  const traitSummary=TRAITS.slice(0,4).map(t=>`${t.label.toLowerCase()} ${fmt(traits[t.key]&&traits[t.key].mean,t.key==='sense'?1:2)}`).join(' · ');
+  return `<div class="notebookDetailHead"><span class="eventKind">${escHtml(notebookLabel(entry))}</span><b>${escHtml(entry.name||entry.key||'Event')}</b></div>`+
+    `<p>${escHtml(entry.message||'Recorded observation.')}</p>${entry.detail?`<p class="spsub">${escHtml(entry.detail)}</p>`:''}`+
+    `<dl class="stats compact"><dt>Tick</dt><dd>${Number(entry.tick||0).toLocaleString()}</dd><dt>Generation</dt><dd>${ev.generation==null?'—':ev.generation}</dd>`+
+    `<dt>Population</dt><dd>${ev.pop==null?'—':ev.pop}</dd><dt>Species</dt><dd>${ev.species==null?'—':ev.species}</dd>`+
+    `<dt>Food</dt><dd>${ev.food==null?'—':ev.food}</dd></dl>`+
+    `<p class="evidenceLine">Snapshot: ${escHtml(traitSummary)}. This is an association recorded at the event, not proof of cause.</p>`;
+}
+
+function paintNotebook(){
+  const list=$('notebookList'),detail=$('notebookDetail');if(!list||!detail||!state)return;
+  const entries=state.notebook||[];
+  if(UI.selectedNotebookId==null&&entries.length)UI.selectedNotebookId=entries[entries.length-1].id;
+  const signature=`${state.seed}|${entries.length}|${UI.selectedNotebookId}`;
+  if(signature!==UI.notebookSignature){
+    UI.notebookSignature=signature;
+    list.innerHTML=entries.slice().reverse().map(e=>`<button type="button" class="notebookEntry${e.id===UI.selectedNotebookId?' selected':''}" data-entry="${e.id}">`+
+      `<span class="notebookTick">${Number(e.tick||0).toLocaleString()}</span><span><b>${escHtml(e.name||e.key||'Event')}</b>`+
+      `<small>${escHtml(notebookLabel(e))}</small></span></button>`).join('');
+    if(list.querySelectorAll)for(const b of list.querySelectorAll('.notebookEntry'))b.onclick=()=>selectNotebookEntry(Number(b.getAttribute('data-entry')));
+  }
+  detail.innerHTML=notebookDetailHtml(entries.find(e=>e.id===UI.selectedNotebookId)||entries[entries.length-1]);
+}
+
+function comparisonSnapshot(){
+  if(!state||!['plains','oasis'].includes(state.scenario)||state.tick<COMPARISON_TICK)return null;
+  return {scenario:state.scenario,seed:state.seed,tick:state.tick,pop:state.organisms.length,
+    speed:traitStats('speed').mean,sense:traitStats('sense').mean};
+}
+
+function comparisonAssessment(runs){
+  const p=runs&&runs.plains,o=runs&&runs.oasis;
+  if(!p||!o)return {valid:false,message:'Capture both scenarios at the same tick with the same seed.'};
+  if(p.seed!==o.seed)return {valid:false,message:'Seeds differ; this is not a paired comparison.'};
+  if(p.tick!==o.tick)return {valid:false,message:'Ticks differ; capture both at the same evolutionary time.'};
+  const supports=p.speed>o.speed&&o.sense>p.sense;
+  return {valid:true,supports,speedDelta:p.speed-o.speed,senseDelta:o.sense-p.sense,
+    message:supports?'This paired run supports the prediction.':'This paired run does not support the full prediction yet.'};
+}
+
+function captureComparisonResult(){
+  const snap=comparisonSnapshot();if(!snap)return false;
+  UI.comparisonRuns[snap.scenario]=snap;paintComparison();return true;
+}
+
+function runComparisonScenario(scenario){
+  if(!['plains','oasis'].includes(scenario))return false;
+  const seed=($('seed')&&$('seed').value.trim())||state.seed||'origin';
+  restart({scenario,seed});return true;
+}
+
+function paintComparison(){
+  const host=$('comparisonResults'),capture=$('btnCaptureComparison');if(!host)return;
+  const p=UI.comparisonRuns.plains,o=UI.comparisonRuns.oasis,a=comparisonAssessment(UI.comparisonRuns);
+  if(capture)capture.disabled=!state||!['plains','oasis'].includes(state.scenario)||state.tick<COMPARISON_TICK;
+  const row=r=>r?`${escHtml(r.seed)} · tick ${r.tick.toLocaleString()} · speed ${fmt(r.speed,2)} · sense ${fmt(r.sense,1)}`:'not captured';
+  let verdict=a.message;
+  if(a.valid)verdict+=` Plains − Oasis speed ${a.speedDelta>=0?'+':''}${fmt(a.speedDelta,2)}; Oasis − Plains sense ${a.senseDelta>=0?'+':''}${fmt(a.senseDelta,1)}.`;
+  const wait=state&&['plains','oasis'].includes(state.scenario)&&state.tick<COMPARISON_TICK?` Capture unlocks at tick ${COMPARISON_TICK.toLocaleString()} (${(COMPARISON_TICK-state.tick).toLocaleString()} remaining).`:'';
+  host.innerHTML=`<p><b>Plains:</b> ${row(p)}</p><p><b>Oasis:</b> ${row(o)}</p><p class="comparisonVerdict">${escHtml(verdict)} One seed is descriptive; repeat across seeds before making a causal claim.${escHtml(wait)}</p>`;
+}
 
 /* Drains state.events (populated by detectSpeciation() in sim.js) each paint. The
    sim only KNOWS an event happened; it has no DOM and shouldn't — this is where that
@@ -9000,6 +9346,9 @@ function paintReadouts(){
 
   paintSpecies();
   paintShocks();
+  paintInspector();
+  paintNotebook();
+  paintComparison();
 
   const ex = $('extinct');
   if (ex) ex.hidden = !extinct();
@@ -9030,6 +9379,8 @@ function restart(opts){
   const scenario = opts.scenario || state.scenario;
   const wasRunning = state ? state.running : true;
   initWorld({ seed, scenario });
+  UI.selectedOrganismId=null; UI.selectedLineageId=null; UI.selectedNotebookId=null;
+  UI.notebookSignature='';
   const toastHost = $('toasts');
   if (toastHost) toastHost.innerHTML = '';   // a toast from the old run mid-animation would otherwise linger, naming a species that no longer exists
   if ($('seed')) $('seed').value = seed;
@@ -9283,6 +9634,13 @@ function bindUI(){
     const lab = $('speedLabel');
     if (lab) lab.textContent = state.speedMult + '\u00d7';
   };
+
+  const plains = $('btnExperimentPlains');
+  if (plains) plains.onclick = () => runComparisonScenario('plains');
+  const oasis = $('btnExperimentOasis');
+  if (oasis) oasis.onclick = () => runComparisonScenario('oasis');
+  const capture = $('btnCaptureComparison');
+  if (capture) capture.onclick = captureComparisonResult;
 
   window.addEventListener('resize', () => { fitCanvases(); drawAll(); });
 

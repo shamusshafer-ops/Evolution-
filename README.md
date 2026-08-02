@@ -11,13 +11,21 @@ Tap the **?** button for an in-app explainer (how to read the three views, what 
 trait costs and why, which scenarios to try) and a live changelog of every change
 that's altered what the sim does.
 
+The **Field Notebook** keeps the run's baseline, environmental events, interventions,
+new adaptations, lineage changes, and extinctions instead of letting their evidence
+vanish with a toast. Select a species or specimen to inspect a real organism's energy
+costs and life history. The **Research** card can capture Plains and Oasis at the same
+seed and tick 6,000 for an honest paired observation; it labels that one-seed result as
+suggestive rather than causal proof.
+
 Drag the specimen well to pan; wheel or pinch to zoom. The overlaid controls provide
 Pause/Run, zoom, view reset, and fullscreen without leaving the well. Arrow keys pan,
 `+`/`-` zoom up to 24×, and `0` resets the camera.
 
 ## The model
 
-Three heritable traits, each with a real metabolic price:
+Six continuous heritable traits are simulated. Four are ecological morphology/diet
+traits, while wariness and plasticity support the learning experiment:
 
 | Trait | Buys | Costs |
 |---|---|---|
@@ -25,16 +33,18 @@ Three heritable traits, each with a real metabolic price:
 | **Size** | a wider bite radius | mass^0.75 basal (Kleiber's law) |
 | **Sense** | detection radius for food | sense^2 (neural tissue scales badly) |
 | **Diet** | which of two resources it digests | no metabolic cost — the price is what it cannot eat |
+| **Wariness** | innate predator avoidance | cognition upkeep |
+| **Plasticity** | faster learning from encounters | cognition upkeep |
 
 Reproduction is sexual: an organism must physically find a compatible partner within
 `MATE.radius`, so local density is a fitness factor and a well-fed loner leaves no
 descendants. Sex also halves reproductive output versus budding (two parents, one
 offspring), which is the twofold cost of sex made literal.
 
-The exponents are the load-bearing part and come from real allometry, not from
-balance-tuning. Kleiber's 3/4-power metabolic scaling holds across roughly 27 orders of
-magnitude of body mass; it is why doubling an organism's size does not double its upkeep.
-The coefficients in `src/data.js` are tuning knobs. The exponents are not.
+Kleiber-style 3/4-power basal scaling is an empirical relationship. The travel,
+sensory, adaptation, and cognition formulas are mechanistic abstractions with tuned
+coefficients, not calibrated biological laws. The inspector exposes their exact current
+values so players can see what the model is actually charging.
 
 ## The thesis
 

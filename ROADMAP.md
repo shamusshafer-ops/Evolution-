@@ -3,6 +3,253 @@
 `ROADMAP.md` is forward-looking and editable in place. Completed session writeups go in
 `ROADMAP-HISTORY.md` (created on first entry), never here.
 
+## Design review — from evolution instrument to living-history game (2026-08-02)
+
+### Product direction
+
+Keep the current simulator intact as **Experiment mode**: seeded, controlled scenarios
+that isolate one mechanism and preserve every measured M1–M10 result. Build the longer
+game as **Living History mode**, using the same ecological engine behind new flags and
+data structures. Add a shared **Field Notebook** for inspecting evidence, comparing
+runs, and reading the history that either mode produces.
+
+**Committed setting and player role:** Living History takes place on a **procedurally
+generated planet**, not a compressed retelling of Earth's chronology. The player is an
+**ecosystem steward**: they manage habitats, connectivity, disturbance, restoration,
+and population movements while evolution remains autonomous. Generated worlds may use
+Earth-derived physical and biological relationships, but their continents, climates,
+lineages, innovations, and extinctions have their own contingent history.
+
+The player loop should be:
+
+**observe → form a hypothesis → alter the environment or population → advance time →
+inspect the evidence → live with the tradeoff.**
+
+The player never buys a trait or chooses a mutation. Agency comes from plausible actions
+such as creating a corridor, protecting a refuge, translocating founders, changing a
+resource regime, or deliberately choosing breeders in a clearly labelled artificial-
+selection mode. Mutation remains undirected and selection remains an outcome.
+
+### Whole-game audit
+
+| Area | Strong now | Main limitation to address |
+|---|---|---|
+| Evolution | Seeded inheritance, standing variation, selection, drift, recombination, persistent lineages | Each continuous trait behaves as one haploid locus and mutates in 90% of births; no dominance, linkage, pleiotropy, or genotype–environment separation |
+| Speciation | Gene flow, assortative mating, geography, temporal isolation, splits and merges | Ecological trait distance directly becomes mate incompatibility; isolation is not independently measured through hybrids or secondary contact |
+| Ecology | Competition for food, predation, learning, social behaviour, conditional adaptations | Food appears rather than growing; no producer dynamics, nutrient return, handling time, parasites, mutualism, or multi-level food web |
+| Environment | Spatial resources, patches, seasons, shocks, deterministic events | Mostly static geometry and scalar food supply; no temperature, moisture, soil, topography, succession, or geological change |
+| Presentation | Shared 3D phenotype, trait ribbon, census, specimens, event toasts | Causes are hard to inspect, toasts disappear, graphs lack explanatory anchors, organisms begin visually tiny, and 16 scenarios form one undifferentiated list |
+| Game loop | Reproducible seeds, speed controls, shocks, many emergent outcomes | Little long-lived player agency, no campaign structure, no explicit hypotheses, and no defensible bridge from ticks to millions of years |
+
+Some current claims also need more precise language. Kleiber scaling is an empirical
+allometric model; `mass × speed²`, `sense²`, absolute armour immunity, and several gene
+costs are useful **mechanistic abstractions**, not calibrated laws. The UI should label
+every rule as one of: **empirical relationship**, **mechanistic abstraction**, or
+**tuned gameplay coefficient**. Likewise, `LIFE.mutateChance = 0.90` should be described
+as accelerated phenotypic variation, never as a literal biological mutation rate.
+
+### Recommended order
+
+#### R0 — Make causes inspectable (first slice shipped 2026-08-02; remaining S–M)
+
+This remains the highest-value foundation. The simulation already produces more stories
+than the interface can explain.
+
+**First slice shipped:**
+
+- A durable Field Notebook records the baseline, environmental events, steward
+  interventions, adaptation births, lineage splits/merges, and extinctions. Every entry
+  stores contemporaneous population, food, generation, viable-species count, and trait
+  summaries without consuming simulation randomness.
+- Selecting a species or specimen opens an inspector for a real living organism. It
+  exposes the exact per-tick basal, travel, sensory, adaptation, and cognition costs;
+  energy, age, food eaten, offspring, encounters, escapes, kills, parents, patch,
+  inherited adaptations, and learned skill.
+- A Plains/Oasis Research card captures same-seed results at tick 6,000 and reports
+  trait/population deltas with explicit one-seed and association-versus-causation
+  caveats. It rejects mismatched seeds and observation times.
+- Scenarios are grouped as Foundations, Speciation, Coevolution, and Living Worlds; the
+  About panel now describes six traits, 3D organisms, model-evidence labels, and the
+  procedural-planet ecosystem-steward direction.
+- The slice is guarded by 23 new checks. The full 505-check suite preserves established
+  scenario outcomes, and build parity remains clean.
+
+**Remaining R0 work:**
+
+- Extend Notebook selection into map focus and before/after evidence, then add graph
+  event markers, phase labels, explicit axes, and lineage filters. Keep “associated
+  with,” not “caused by,” unless a controlled comparison supports causation.
+- Extend the current exact per-tick organism ledger with lifetime energy income and
+  expenditure if those values become simulation state rather than reconstructed claims.
+- Upgrade the single-result comparison card into paired and batch experiment runners.
+  Report effect size,
+  replicate count, seed list, variability, and negative results—not only means from a
+  single attractive run. A same-seed comparison is not automatically a counterfactual
+  once one treatment consumes extra random draws; new systems should use named or
+  counter-based RNG streams while legacy scenarios keep their established stream.
+- Add Monoculture/Oasis and Temperate/Predation experiment cards after the runner can
+  store ruleset version, seed sets, and complete treatment metadata.
+- Improve initial camera/contrast and complete follow-a-lineage camera behaviour.
+
+**First testable iteration: passed.** The notebook, organism inspector, and one
+Plains/Oasis comparison card are live. Rendering and inspection do not advance RNG or
+mutate ecological state. A short moderated usability check remains worthwhile before
+calling all of R0 complete.
+
+#### R1 — Build contingent eras and a valid deep-time clock (M–L)
+
+Do not relabel ticks as years. The current individual simulation covers ecological time
+and hundreds of generations, not millions of years. Living History needs an explicit
+time-scale bridge before it makes a deep-time claim.
+
+- Track generation time as a life-history outcome, then display ecological ticks,
+  generations, and calibrated model years separately.
+- Use exact individual simulation during change and a validated compressed step only
+  during stable intervals. The compressed population-genetic update must reproduce the
+  full individual model over shorter intervals before it is allowed to skip them.
+- Replace fixed era levels with two contingent gates:
+  **environmental opportunity** (new climate, habitat, or resource exists) and a rare
+  **key innovation** (a lineage gains a developmental module that exposes a new trait
+  axis). The innovation belongs only to descendants, may be lost, and need not appear in
+  every run or in a fixed order.
+- First candidate: a temperature/moisture landscape plus an energetically costly
+  thermoregulation innovation. It opens cold or seasonal habitat; it does not grant a
+  universal stat bonus.
+
+**Validation:** identical worlds can enter different eras; no unlock is guaranteed; an
+innovation is selected against when its ecological opportunity is absent.
+
+#### R2 — Add a quantitative-genetics layer (L)
+
+Preserve the current accelerated genetics for legacy experiments. Develop the new model
+behind a Living History flag and compare its qualitative results before migration.
+
+- Represent each continuous trait with several diploid loci and additive effects:
+  `breeding value = Σ allele effects`; phenotype adds environment and plastic response.
+- Give chromosomes recombination positions so linked loci hitchhike. Add dominance for
+  discrete alleles, a sparse pleiotropy matrix for correlated traits, and a few explicit
+  epistatic prerequisites for key innovations.
+- Mutate genomes rarely per birth with mostly small effects and occasional larger
+  regulatory changes. Expose “accelerated”, “teaching”, and “calibrated” rate presets
+  with honest labels rather than pretending one rate fits every organism or timescale.
+- Track heterozygosity, inbreeding, effective population size, genetic load, and
+  additive genetic variance. These make bottlenecks and founder effects mechanically
+  legible rather than merely smaller census numbers.
+- Add sex, sex ratio, mate systems, and sexual dimorphism only after they create a
+  specific question; diploidy and linkage matter first.
+
+**Validation:** small populations lose neutral variation faster; linked neutral alleles
+hitchhike with selected alleles; inbreeding raises expression of recessive load; existing
+Plains/Oasis and predation directions remain reproducible in controlled twins.
+
+#### R3 — Make the world a changing physical system (M–L)
+
+Use a coarse environmental grid (roughly 30 × 20 cells) updated less often than
+organisms. Each cell carries elevation, temperature, moisture, plant biomass, soil
+nutrients, and disturbance age.
+
+- Plant resource growth should be local and renewable rather than spawned from nowhere:
+  `growth = r × biomass × (1 − biomass/K)`, with `K` limited by temperature, water, and
+  nutrients. Grazing removes biomass; death and waste enter detritus; decomposition
+  returns nutrients.
+- Climate should move spatially: temperature follows baseline climate plus elevation;
+  moisture follows rain, evaporation, and runoff. Seasons then shift habitat suitability,
+  not merely multiply global food production.
+- Add succession after fire, flood, drought, volcanic ash, and grazing. Early colonists
+  grow fast; later competitors build biomass; disturbance frequency selects different
+  strategies.
+- Add slow uplift, erosion, rivers, coastlines, and sea-level change. These alter
+  connectivity and productivity together, creating and later removing barriers.
+
+**First geology experiment:** slowly raise a central ridge, measure divergence on its
+two climatic faces, then erode a pass and observe secondary contact. This single slice
+connects geology, climate, dispersal, speciation, and player-readable history.
+
+#### R4 — Let organisms reshape ecology (L)
+
+Build upward from producers rather than adding disconnected binary adaptations.
+
+- Replace the carnivore switch with an evolvable diet/trophic strategy: plant, detritus,
+  and prey returns vary continuously with morphology and digestive investment. Use a
+  saturating functional response with attack rate and handling time so intake cannot
+  grow without bound.
+- Add producer guilds, herbivores, omnivores, predators, scavengers, and decomposers in
+  that order. Show energy-flux arrows and biomass by trophic level, not only organism
+  counts.
+- Make defences probabilistic and graded. Armour reduces capture or injury instead of
+  absolute immunity; venom changes handling and escape; camouflage depends on the local
+  substrate; packs split captured energy.
+- Add eco-evolutionary feedback: grazing changes vegetation, burrowing changes soil,
+  predators alter prey behaviour, and evolved defence can change population cycles.
+- Later add host–parasite coevolution (transmission–virulence and resistance costs) and
+  mutualism (partners exchange a real limiting resource; cheating remains possible).
+
+**First food-web experiment:** evolving prey defence versus a frozen-genotype control.
+Measure whether defence changes the phase or visibility of predator–prey cycles, not
+whether defence simply fixes.
+
+#### R5 — Test speciation instead of declaring a threshold crossed (M–L)
+
+Separate ecological phenotype, mating signal/preference, and hybrid compatibility.
+
+- Let mate preference and signal coevolve; do not make overall ecological similarity an
+  unexplained universal preference. Keep spatial encounter distance as a distinct step.
+- Produce hybrids with recombined genomes. Their survival, fertility, and mate success
+  reveal postzygotic isolation, gene flow, introgression, and reinforcement.
+- Report **structured population**, **incipient lineage**, and **reproductive isolation**
+  separately. A disconnected population is evidence of interrupted gene flow; stable
+  isolation after contact is stronger evidence.
+- Add a secondary-contact experiment with four possible emergent outcomes: fusion,
+  hybrid zone, reinforcement, or persistent isolation. Add a gene-flow graph and hybrid
+  ancestry overlay.
+- Render backlog #30’s phylogeny with uncertainty, extinct branches, merges, and sampled
+  fossils. Mass extinctions should remove ecological roles and create contingent
+  radiations, not merely apply a large cull.
+
+#### R6 — Add agency, campaigns, and replayability (M)
+
+- Living History campaigns should present ecological dilemmas, not scripted trait goals:
+  preserve three lineages through cooling; restore a food web after collapse; reconnect
+  habitats without genetically swamping an endemic; determine why a population cycles.
+- Interventions consume a concrete disturbance/logistics budget and carry side effects.
+  Corridors restore migration but spread disease; refuges protect specialists but reduce
+  range; translocation rescues demography but can erase local adaptation; captive
+  breeding raises numbers but risks inbreeding and domestication.
+- Offer optional uncertainty: field sampling gives confidence intervals while the full
+  instrument remains available as an accessibility/science setting.
+- At campaign end, generate a shareable natural history: map changes, key innovations,
+  phylogeny, extinctions, interventions, and claims supported by paired evidence. Seed +
+  ruleset version + intervention log is the replay code.
+- Replayability comes from contingent worlds, innovations, and tradeoffs—not from random
+  rewards. “Failure” gets an evidence-based postmortem showing extinction vortex,
+  resource collapse, genetic swamping, predation, or bad luck where distinguishable.
+
+### Scope guardrails
+
+- Do R0 before the large eras system. More mechanisms without causal visibility will
+  make the game harder to understand, not deeper.
+- Add one interaction with a controlled twin and measurable prediction at a time.
+- Never claim a real-world timescale until the model contains and validates the bridge.
+- Never use scenario survival alone as evidence that an adaptation is beneficial.
+- Preserve legacy RNG/results; version rulesets so old shared runs remain replayable.
+- Prefer continuous tradeoffs, local resource conservation, and probabilistic effects
+  over absolute immunities and universal upgrades.
+
+### Evidence anchors
+
+The design direction is supported by primary work showing that developmental
+genotype–phenotype maps constrain which adaptations are reachable; evolving prey can
+qualitatively change predator–prey dynamics; secondary contact can reveal whether
+diverged lineages fuse or remain isolated; and topography, erosion, and nutrient flux
+shape diversification over deep time:
+
+- Salazar-Ciudad & Marín-Riera, [development-based genotype–phenotype maps](https://www.nature.com/articles/nature12142)
+- Yoshida et al., [cryptic eco-evolutionary population dynamics](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.0050235)
+- Grant & Grant, [secondary contact in Darwin's finches](https://pmc.ncbi.nlm.nih.gov/articles/PMC2787178/)
+- Igea & Tanentzap, [topographic uplift and speciation](https://www.nature.com/articles/s41559-021-01545-6)
+- Salles et al., [landscape dynamics and Phanerozoic biodiversity](https://www.nature.com/articles/s41586-023-06777-z)
+- Haag-Liautard et al., [direct mutation-rate estimates in *Drosophila*](https://www.nature.com/articles/nature05388)
+
 ## Status
 
 **Heritable cosmetic drift shipped (2026-08-01).** Every organism now has 13 neutral
@@ -723,14 +970,10 @@ small version of the same bug. `tests/test-ui.js`, 11 checks, including the one 
 matters most: a MANUAL pause must never show the auto-pause message, since a false
 explanation is worse than no explanation.
 
-## Open decision — clade colour stability
+## Resolved — clade colour stability
 
-Clade colours are assigned by size rank, so a lineage's colour can change between samples
-when ranks swap. Stable colours would require stable identity, which is the thing this
-model deliberately refuses to assume. Expect flicker when two clades are close in size.
-Alternatives: colour by position in trait space (stable, but two distant clades could
-collide), or track lineage ancestry to give each clade a persistent id (correct, more
-work — see #2).
+M8 added persistent lineage identity. Names and colours now key off lineage ids rather
+than population rank; splits and merges retain explicit ancestry.
 
 ## Resolved — size and the size/foraging confound
 
@@ -749,11 +992,10 @@ Two items that used to live here are retired, not forgotten:
   species — so the confound it described cannot occur anymore. `test-species.js`,
   which existed specifically to guard against it, was deleted in the same release.
 
-## Planned — #2 Lineage tracking (not built)
+## Resolved — #2 Lineage tracking
 
-Every organism already carries `gen`. Track parent ids to render a phylogeny and let the
-player click an organism to see its ancestry. The drift ribbon shows the population;
-this would show individuals, which is the other half of the story.
+Persistent ids, parent records, splits, and merges shipped in M8. The visual phylogeny
+and clickable ancestry inspector remain separate work under #30 and R0 above.
 
 ## Planned — #3 Save / share a run (not built)
 

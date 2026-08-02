@@ -67,6 +67,9 @@ function makeState(opts){
     nextLineageId: 0,      // monotonic; a lineage id is never reused, so ancestry stays unambiguous
     lineageOf: new Map(),  // organism id -> lineage id, as of the last computeSpecies() call
     events: [],            // queued notifications for the UI to drain (speciation, etc.)
+    notebook: [],          // persistent, evidence-bearing natural history for this run
+    nextNotebookId: 1,
+    extinctLineages: new Set(), // prevents duplicate extinction records
     adaptationsSeen: {},   // one-time emergence notifications, reset with each run
     environmentHistory: [],// automatic Living World events, retained for replay/testing
     nextEnvironmentEvent: null,
@@ -80,6 +83,41 @@ function makeState(opts){
     sampleEvery: 30,
     censusSampleEvery: 240,  // 8x coarser than sampleEvery -- see sampleCensus()
   };
+}
+
+/* ---------- Field Notebook ----------
+   Notifications are transient attention cues; notebook entries are the durable
+   evidence trail. A notebook snapshot records what the model knew at the event,
+   without asserting that the event caused the observed state. These helpers are
+   deliberately read-only apart from appending to the two history arrays. */
+function notebookEvidence(lineageId){
+  const traits={};
+  for(const t of TRAITS){
+    const s=lineageId==null?traitStats(t.key):cladeTraitStats(lineageId,t.key);
+    traits[t.key]={mean:s.mean,sd:s.sd,n:s.n};
+  }
+  return {
+    pop:state.organisms.length,food:state.food.length,generation:state.generation,
+    species:viableSpeciesCount(),traits,
+  };
+}
+
+function recordNotebookEvent(event){
+  if(!state||!event)return null;
+  const entry=Object.assign({},event);
+  entry.id=state.nextNotebookId++;
+  if(entry.tick==null)entry.tick=state.tick;
+  entry.evidence=notebookEvidence(entry.lineageId==null?null:entry.lineageId);
+  state.notebook.push(entry);
+  if(state.notebook.length>300)state.notebook.shift();
+  return entry;
+}
+
+function queueEvent(event){
+  if(!state||!event)return null;
+  state.events.push(event);
+  recordNotebookEvent(event);
+  return event;
 }
 
 function clamp(v, lo, hi){ return v < lo ? lo : (v > hi ? hi : v); }
@@ -134,13 +172,23 @@ function cosmeticGenomeFor(o){
 /* mass ∝ size³ — volume scaling. Used by every cost term. */
 function massOf(o){ return METAB.massCoef * o.size * o.size * o.size; }
 
-/* Per-tick energy burn. See METAB in data.js for why these exponents. */
-function metabolicCost(o){
+/* Pure per-tick energy accounting for the inspector and the simulation. Keeping one
+   shared calculation prevents the UI from presenting a cost different from the one
+   selection actually charges. Reading it never advances RNG or changes state. */
+function energyCostBreakdown(o){
   const m = massOf(o);
   const basal  = METAB.basalCoef  * Math.pow(m, METAB.basalExp);
   const travel = METAB.travelCoef * m * o.speed * o.speed;
-  const vision = METAB.visionCoef * o.sense * o.sense;
-  return basal + travel + vision + adaptationCost(o) + cognitionCost(o);
+  const sensory = METAB.visionCoef * o.sense * o.sense;
+  const adaptations = adaptationCost(o);
+  const cognition = cognitionCost(o);
+  return { basal, travel, sensory, adaptations, cognition,
+           total:basal+travel+sensory+adaptations+cognition };
+}
+
+/* Per-tick energy burn. See METAB in data.js for why these exponents. */
+function metabolicCost(o){
+  return energyCostBreakdown(o).total;
 }
 
 /* Neural upkeep. Charged only where learning is enabled, so cognitive traits are
@@ -245,6 +293,7 @@ function makeOrganism(x, y, traits, gen, adapt, cosmetic){
     energy: 0,
     target: null,
     eaten: 0,
+    offspring: 0,
   };
   for (const t of TRAITS){
     o[t.key] = clamp(traits && traits[t.key] != null ? traits[t.key] : t.init, t.min, t.max);
@@ -349,6 +398,10 @@ function initWorld(opts){
 
   sampleHistory();
   if(state.cfg.stochasticEnvironment) scheduleEnvironmentEvent();
+  const scName=sc?sc.name:state.scenario;
+  recordNotebookEvent({type:'start',name:`${scName} run began`,
+    message:'Initial population and environment recorded as the comparison baseline.',
+    detail:`seed ${state.seed}`});
   return state;
 }
 
@@ -535,6 +588,8 @@ function reproduceSexual(a, b){
   child.energy = giveA + giveB + careEnergy;
   child.dir = rnd() * Math.PI * 2;
   state.organisms.push(child);
+  a.offspring=(a.offspring||0)+1;
+  b.offspring=(b.offspring||0)+1;
   detectAdaptationEmergence(child, a);
   state.stats.born++;
   if (child.gen > state.generation) state.generation = child.gen;
@@ -551,9 +606,10 @@ function reproduceSexual(a, b){
 
    `cull` is different in kind: it is instantaneous population mortality, not an
    environmental patch, and is applied once at trigger time rather than held open. */
-function triggerShock(id){
+function triggerShock(id, source){
   const def = SHOCKS_BY_ID[id];
   if (!def) return false;
+  source=source||'steward';
   if (def.cullFraction != null){
     const n = Math.floor(state.organisms.length * def.cullFraction);
     // Indiscriminate of trait value — this is drift, not selection, and the whole
@@ -564,6 +620,9 @@ function triggerShock(id){
     }
     state.stats.culled = (state.stats.culled || 0) + n;
     computeSpecies();
+    if(source==='steward')recordNotebookEvent({
+      type:'intervention',name:def.name,message:def.blurb,detail:`${n} organisms lost`,
+    });
     return true;
   }
   if (def.patch){
@@ -583,7 +642,10 @@ function triggerShock(id){
     for (const k in def.patch) snapshot[k] = state.cfg[k];
     Object.assign(state.cfg, def.patch);
     state.activeShocks = state.activeShocks || [];
-    state.activeShocks.push({ id, name:def.name, until: state.tick + def.duration, snapshot });
+    state.activeShocks.push({ id, name:def.name, until: state.tick + def.duration, snapshot, source });
+    if(source==='steward')recordNotebookEvent({
+      type:'intervention',name:def.name,message:def.blurb,detail:`${def.duration} ticks`,
+    });
   }
   return true;
 }
@@ -609,7 +671,7 @@ function applyLivingWorldEvent(key){
   const def=LIVING_EVENT_BY_KEY[key]; if(!def) return false;
   let detail='';
   if(key==='drought'||key==='bloom'){
-    if(!triggerShock(key)) return false;
+    if(!triggerShock(key,'planet')) return false;
     detail=`${SHOCKS_BY_ID[key].duration} ticks`;
   }else if(key==='dieoff'){
     const n=Math.floor(state.organisms.length*LIVING_WORLD.dieoffFraction);
@@ -638,8 +700,8 @@ function applyLivingWorldEvent(key){
   }
   const record={tick:state.tick,key,name:def.name,detail};
   state.environmentHistory.push(record);
-  state.events.push({type:'environment',tick:state.tick,key,name:def.name,
-                     color:def.color,message:def.message,detail});
+  queueEvent({type:'environment',tick:state.tick,key,name:def.name,
+              color:def.color,message:def.message,detail});
   return true;
 }
 
@@ -877,6 +939,31 @@ function traitHistogram(key, bins){
   return out;
 }
 
+function organismById(id){
+  if(!state)return null;
+  for(const o of state.organisms)if(o.id===id)return o;
+  return null;
+}
+
+/* A real organism closest to its lineage's ecological trait centroid. The inspector
+   and lineage list use an extant individual, never a synthetic average. */
+function representativeOrganismForLineage(lineageId){
+  if(!state)return null;
+  const clade=(state.clades||[]).find(c=>c.id===lineageId);
+  const members=state.organisms.filter(o=>o.clade===lineageId);
+  if(!members.length)return null;
+  if(!clade||!clade.traits)return members[0];
+  let best=members[0],bestD=Infinity;
+  for(const o of members){
+    let d=0;
+    for(const t of SPECIATION_TRAITS){
+      const z=(o[t.key]-clade.traits[t.key])/(t.max-t.min);d+=z*z;
+    }
+    if(d<bestD){bestD=d;best=o;}
+  }
+  return best;
+}
+
 /* ---------- Predation ----------
    Runs only when cfg.predation is set. Spatially indexed over the whole population
    the same way matingPass indexes breeders — a naive pairwise scan would be O(n^2)
@@ -1078,10 +1165,11 @@ function detectAdaptationEmergence(child, parent){
     if (def.enabledBy && !state.cfg[def.enabledBy]) continue;
     if (state.adaptationsSeen[def.key]) continue;
     state.adaptationsSeen[def.key] = true;
-    state.events.push({
+    const lineageId=parent && parent.clade != null ? parent.clade : child.clade;
+    queueEvent({
       type:'adaptation', tick:state.tick, key:def.key, name:def.name,
       glyph:def.glyph, color:def.color, message:def.emergence || 'has appeared.',
-      lineage:cladeName(parent && parent.clade != null ? parent.clade : child.clade),
+      lineage:cladeName(lineageId),lineageId,organismId:child.id,
     });
   }
 }
@@ -1431,7 +1519,18 @@ function sampleHistory(){
    coarser, and that coarseness is imperceptible at the timescale the phenomenon
    itself operates on. */
 function sampleCensus(){
+  const prior=new Map((state.clades||[]).filter(c=>c.n>=5).map(c=>[c.id,c.n]));
   computeSpecies();   // emergent species are derived, so they must be recomputed, not stored
+  const current=new Set((state.clades||[]).map(c=>c.id));
+  const mergedAway=new Set();
+  for(const c of (state.clades||[]))if(c.event==='merge')for(const id of (c.from||[]))mergedAway.add(id);
+  for(const [id,n] of prior){
+    if(current.has(id)||mergedAway.has(id)||state.extinctLineages.has(id))continue;
+    state.extinctLineages.add(id);
+    recordNotebookEvent({type:'extinction',name:`${cladeName(id)} went extinct`,
+      lineage:cladeName(id),lineageId:id,detail:`last viable census: ${n} organisms`,
+      message:'No living members remain. This records disappearance, not a single inferred cause.'});
+  }
   const cen = { tick: state.tick, clades: (state.clades||[]).map(c=>c.n), nClades: viableSpeciesCount() };
   state.census.push(cen);
   if (state.census.length > 260) state.census.shift();
@@ -1456,20 +1555,24 @@ function detectSpeciation(){
   for (const c of (state.clades || [])){
     if (c.n < 5) continue;                       // ignore unviable noise
     if (c.event === 'split' || c.event === 'new'){
-      state.events.push({
+      queueEvent({
         type: 'speciation',
         tick: state.tick,
         name: cladeName(c.id),
         parent: (c.from && c.from.length) ? cladeName(c.from[0]) : null,
+        lineageId:c.id,
+        parentId:(c.from && c.from.length) ? c.from[0] : null,
         n: c.n,
         totalSpecies: viableSpeciesCount(),
       });
     } else if (c.event === 'merge'){
-      state.events.push({
+      queueEvent({
         type: 'merge',
         tick: state.tick,
         name: cladeName(c.id),
         absorbed: (c.from || []).map(cladeName),
+        lineageId:c.id,
+        absorbedIds:(c.from||[]).slice(),
         n: c.n,
         totalSpecies: viableSpeciesCount(),
       });

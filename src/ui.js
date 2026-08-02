@@ -3,7 +3,10 @@
    are the ones the player asked for (start/pause/reset/scenario/speed).
    ========================================================================== */
 
-const UI = { els:{}, lastPaint:0, autoPaused:false, cssFullscreen:false };
+const UI = { els:{}, lastPaint:0, autoPaused:false, cssFullscreen:false,
+  selectedOrganismId:null, selectedLineageId:null, selectedNotebookId:null,
+  notebookSignature:'', comparisonRuns:{plains:null,oasis:null} };
+const COMPARISON_TICK=6000;
 
 function $(id){ return document.getElementById(id); }
 
@@ -11,14 +14,27 @@ function buildScenarioButtons(){
   const host = $('scenarios');
   if (!host) return;
   host.innerHTML = '';
-  for (const sc of SCENARIOS){
-    const b = document.createElement('button');
-    b.className = 'chip' + (sc.id === state.scenario ? ' on' : '');
-    b.textContent = sc.name;
-    b.title = sc.blurb;
-    b.setAttribute('aria-pressed', String(sc.id === state.scenario));
-    b.onclick = () => restart({ scenario: sc.id, seed: $('seed').value.trim() || 'origin' });
-    host.appendChild(b);
+  const groups=[
+    ['Foundations',['temperate','plains','oasis','famine','glut','mono','seasonal']],
+    ['Speciation',['archipelago','radiation']],
+    ['Coevolution',['nocturne','wild','predation','foodchain','armsrace','social','baldwin']],
+    ['Living worlds',['livingworld']],
+  ];
+  for(const [label,ids] of groups){
+    const group=document.createElement('div');group.className='scenarioGroup';
+    const head=document.createElement('div');head.className='scenarioGroupLabel';head.textContent=label;group.appendChild(head);
+    const choices=document.createElement('div');choices.className='scenarioChoices';group.appendChild(choices);
+    for(const id of ids){
+      const sc=SCENARIOS.find(s=>s.id===id);if(!sc)continue;
+      const b = document.createElement('button');
+      b.className = 'chip' + (sc.id === state.scenario ? ' on' : '');
+      b.textContent = sc.name;
+      b.title = sc.blurb;
+      b.setAttribute('aria-pressed', String(sc.id === state.scenario));
+      b.onclick = () => restart({ scenario: sc.id, seed: $('seed').value.trim() || 'origin' });
+      choices.appendChild(b);
+    }
+    host.appendChild(group);
   }
   const cur = SCENARIOS.find(s => s.id === state.scenario);
   if (cur && $('scenarioBlurb')) $('scenarioBlurb').textContent = cur.blurb;
@@ -72,15 +88,18 @@ function paintSpecies(){
         }
       }
     }
-    html += '<div class="sprow">' +
+    html += `<button type="button" class="sprow speciesSelect${UI.selectedLineageId===c.id?' selected':''}" data-lineage="${c.id}" aria-label="Inspect ${cladeName(c.id)} lineage">` +
       `<span class="dot" style="background:${cladeColor(c.id)}"></span>` +
       `<span class="spname">${cladeName(c.id)}` +
         `<span class="spsub">spd ${c.traits.speed.toFixed(2)} \u00b7 sns ${c.traits.sense.toFixed(0)} \u00b7 sz ${c.traits.size.toFixed(2)}</span>` +
       '</span>' +
       `<span class="adGlyphs">${glyphs}</span>` +
-      `<span class="spcount">${c.n}</span></div>`;
+      `<span class="spcount">${c.n}</span></button>`;
   }
   host.innerHTML = html;
+  if(host.querySelectorAll)for(const row of host.querySelectorAll('.speciesSelect')){
+    row.onclick=()=>selectLineage(Number(row.getAttribute('data-lineage')));
+  }
 }
 
 function buildSpeciesList(){ paintSpecies(); }
@@ -98,7 +117,7 @@ function buildShockButtons(){
     b.className = 'chip';
     b.textContent = sh.name;
     b.title = sh.blurb;
-    b.onclick = () => { triggerShock(sh.id); paintShocks(); };
+    b.onclick = () => { triggerShock(sh.id); paintShocks(); paintNotebook(); };
     host.appendChild(b);
   }
 }
@@ -125,6 +144,140 @@ function paintShocks(){
 }
 
 function fmt(n, d){ return (n==null||!isFinite(n)) ? '—' : n.toFixed(d==null?2:d); }
+
+function escHtml(value){
+  return String(value==null?'':value).replace(/[&<>"']/g,ch=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  })[ch]);
+}
+
+function selectOrganism(id){
+  const o=organismById(Number(id));
+  UI.selectedOrganismId=o?o.id:Number(id);
+  if(o)UI.selectedLineageId=o.clade;
+  paintInspector();paintSpecies();
+  return o;
+}
+
+function selectLineage(id){
+  UI.selectedLineageId=Number(id);
+  const o=representativeOrganismForLineage(UI.selectedLineageId);
+  UI.selectedOrganismId=o?o.id:null;
+  paintInspector();paintSpecies();
+  return o;
+}
+
+function inspectorHtml(o){
+  if(!o)return '<p class="emptyState">Select a living species or specimen to inspect its real costs and history.</p>';
+  const cost=energyCostBreakdown(o);
+  const traitRows=TRAITS.map(t=>`<dt>${escHtml(t.label)}</dt><dd>${fmt(o[t.key],t.key==='sense'?1:2)}</dd>`).join('');
+  const active=ADAPTATIONS.filter(a=>o.ad&&o.ad[a.key]).map(a=>a.name);
+  const side=state.cfg.twoPatches?(o.homePatch===0?'west':'east'):'not divided';
+  return `<div class="inspectHead"><span class="dot" style="background:${cladeColor(o.clade)}"></span>`+
+    `<b>${escHtml(cladeName(o.clade))} #${o.id}</b><span>generation ${o.gen}</span></div>`+
+    `<dl class="stats compact"><dt>Energy</dt><dd>${fmt(o.energy,1)}</dd><dt>Age</dt><dd>${o.age} ticks</dd>`+
+    `<dt>Food eaten</dt><dd>${o.eaten||0}</dd><dt>Offspring</dt><dd>${o.offspring||0}</dd>`+
+    `<dt>Escapes</dt><dd>${o.escapes||0}</dd><dt>Kills</dt><dd>${o.kills||0}</dd>`+
+    `<dt>Birth patch</dt><dd>${side}</dd><dt>Parents</dt><dd>${o.parents&&o.parents.length?o.parents.join(' · '):'founder'}</dd></dl>`+
+    `<h3>Per-tick energy costs</h3><dl class="stats compact"><dt>Basal</dt><dd>${fmt(cost.basal,3)}</dd>`+
+    `<dt>Travel</dt><dd>${fmt(cost.travel,3)}</dd><dt>Sensory</dt><dd>${fmt(cost.sensory,3)}</dd>`+
+    `<dt>Adaptations</dt><dd>${fmt(cost.adaptations,3)}</dd><dt>Cognition</dt><dd>${fmt(cost.cognition,3)}</dd>`+
+    `<dt>Total</dt><dd>${fmt(cost.total,3)}</dd></dl><h3>Inherited phenotype</h3>`+
+    `<dl class="stats compact">${traitRows}</dl><p class="inspectNote"><b>Adaptations:</b> ${active.length?escHtml(active.join(', ')):'none'}. `+
+    `Learned escape skill ${fmt(o.learned||0,3)} is acquired within this lifetime and is not inherited.</p>`;
+}
+
+function paintInspector(){
+  const host=$('inspector');if(!host||!state)return;
+  let o=UI.selectedOrganismId==null?null:organismById(UI.selectedOrganismId);
+  if(!o&&UI.selectedLineageId!=null)o=representativeOrganismForLineage(UI.selectedLineageId);
+  if(o)UI.selectedOrganismId=o.id;
+  host.innerHTML=inspectorHtml(o);
+}
+
+function notebookLabel(entry){
+  if(entry.type==='start')return 'Baseline';
+  if(entry.type==='intervention')return 'Steward action';
+  if(entry.type==='environment')return 'Planet event';
+  if(entry.type==='adaptation')return 'Innovation';
+  if(entry.type==='speciation')return 'Lineage split';
+  if(entry.type==='merge')return 'Lineage merge';
+  if(entry.type==='extinction')return 'Extinction';
+  return 'Observation';
+}
+
+function selectNotebookEntry(id){
+  UI.selectedNotebookId=Number(id);
+  const entry=(state.notebook||[]).find(e=>e.id===UI.selectedNotebookId);
+  if(entry&&entry.lineageId!=null)selectLineage(entry.lineageId);
+  paintNotebook();
+  return entry;
+}
+
+function notebookDetailHtml(entry){
+  if(!entry)return '<p class="emptyState">Events and steward actions will accumulate here without disappearing.</p>';
+  const ev=entry.evidence||{},traits=ev.traits||{};
+  const traitSummary=TRAITS.slice(0,4).map(t=>`${t.label.toLowerCase()} ${fmt(traits[t.key]&&traits[t.key].mean,t.key==='sense'?1:2)}`).join(' · ');
+  return `<div class="notebookDetailHead"><span class="eventKind">${escHtml(notebookLabel(entry))}</span><b>${escHtml(entry.name||entry.key||'Event')}</b></div>`+
+    `<p>${escHtml(entry.message||'Recorded observation.')}</p>${entry.detail?`<p class="spsub">${escHtml(entry.detail)}</p>`:''}`+
+    `<dl class="stats compact"><dt>Tick</dt><dd>${Number(entry.tick||0).toLocaleString()}</dd><dt>Generation</dt><dd>${ev.generation==null?'—':ev.generation}</dd>`+
+    `<dt>Population</dt><dd>${ev.pop==null?'—':ev.pop}</dd><dt>Species</dt><dd>${ev.species==null?'—':ev.species}</dd>`+
+    `<dt>Food</dt><dd>${ev.food==null?'—':ev.food}</dd></dl>`+
+    `<p class="evidenceLine">Snapshot: ${escHtml(traitSummary)}. This is an association recorded at the event, not proof of cause.</p>`;
+}
+
+function paintNotebook(){
+  const list=$('notebookList'),detail=$('notebookDetail');if(!list||!detail||!state)return;
+  const entries=state.notebook||[];
+  if(UI.selectedNotebookId==null&&entries.length)UI.selectedNotebookId=entries[entries.length-1].id;
+  const signature=`${state.seed}|${entries.length}|${UI.selectedNotebookId}`;
+  if(signature!==UI.notebookSignature){
+    UI.notebookSignature=signature;
+    list.innerHTML=entries.slice().reverse().map(e=>`<button type="button" class="notebookEntry${e.id===UI.selectedNotebookId?' selected':''}" data-entry="${e.id}">`+
+      `<span class="notebookTick">${Number(e.tick||0).toLocaleString()}</span><span><b>${escHtml(e.name||e.key||'Event')}</b>`+
+      `<small>${escHtml(notebookLabel(e))}</small></span></button>`).join('');
+    if(list.querySelectorAll)for(const b of list.querySelectorAll('.notebookEntry'))b.onclick=()=>selectNotebookEntry(Number(b.getAttribute('data-entry')));
+  }
+  detail.innerHTML=notebookDetailHtml(entries.find(e=>e.id===UI.selectedNotebookId)||entries[entries.length-1]);
+}
+
+function comparisonSnapshot(){
+  if(!state||!['plains','oasis'].includes(state.scenario)||state.tick<COMPARISON_TICK)return null;
+  return {scenario:state.scenario,seed:state.seed,tick:state.tick,pop:state.organisms.length,
+    speed:traitStats('speed').mean,sense:traitStats('sense').mean};
+}
+
+function comparisonAssessment(runs){
+  const p=runs&&runs.plains,o=runs&&runs.oasis;
+  if(!p||!o)return {valid:false,message:'Capture both scenarios at the same tick with the same seed.'};
+  if(p.seed!==o.seed)return {valid:false,message:'Seeds differ; this is not a paired comparison.'};
+  if(p.tick!==o.tick)return {valid:false,message:'Ticks differ; capture both at the same evolutionary time.'};
+  const supports=p.speed>o.speed&&o.sense>p.sense;
+  return {valid:true,supports,speedDelta:p.speed-o.speed,senseDelta:o.sense-p.sense,
+    message:supports?'This paired run supports the prediction.':'This paired run does not support the full prediction yet.'};
+}
+
+function captureComparisonResult(){
+  const snap=comparisonSnapshot();if(!snap)return false;
+  UI.comparisonRuns[snap.scenario]=snap;paintComparison();return true;
+}
+
+function runComparisonScenario(scenario){
+  if(!['plains','oasis'].includes(scenario))return false;
+  const seed=($('seed')&&$('seed').value.trim())||state.seed||'origin';
+  restart({scenario,seed});return true;
+}
+
+function paintComparison(){
+  const host=$('comparisonResults'),capture=$('btnCaptureComparison');if(!host)return;
+  const p=UI.comparisonRuns.plains,o=UI.comparisonRuns.oasis,a=comparisonAssessment(UI.comparisonRuns);
+  if(capture)capture.disabled=!state||!['plains','oasis'].includes(state.scenario)||state.tick<COMPARISON_TICK;
+  const row=r=>r?`${escHtml(r.seed)} · tick ${r.tick.toLocaleString()} · speed ${fmt(r.speed,2)} · sense ${fmt(r.sense,1)}`:'not captured';
+  let verdict=a.message;
+  if(a.valid)verdict+=` Plains − Oasis speed ${a.speedDelta>=0?'+':''}${fmt(a.speedDelta,2)}; Oasis − Plains sense ${a.senseDelta>=0?'+':''}${fmt(a.senseDelta,1)}.`;
+  const wait=state&&['plains','oasis'].includes(state.scenario)&&state.tick<COMPARISON_TICK?` Capture unlocks at tick ${COMPARISON_TICK.toLocaleString()} (${(COMPARISON_TICK-state.tick).toLocaleString()} remaining).`:'';
+  host.innerHTML=`<p><b>Plains:</b> ${row(p)}</p><p><b>Oasis:</b> ${row(o)}</p><p class="comparisonVerdict">${escHtml(verdict)} One seed is descriptive; repeat across seeds before making a causal claim.${escHtml(wait)}</p>`;
+}
 
 /* Drains state.events (populated by detectSpeciation() in sim.js) each paint. The
    sim only KNOWS an event happened; it has no DOM and shouldn't — this is where that
@@ -221,6 +374,9 @@ function paintReadouts(){
 
   paintSpecies();
   paintShocks();
+  paintInspector();
+  paintNotebook();
+  paintComparison();
 
   const ex = $('extinct');
   if (ex) ex.hidden = !extinct();
@@ -251,6 +407,8 @@ function restart(opts){
   const scenario = opts.scenario || state.scenario;
   const wasRunning = state ? state.running : true;
   initWorld({ seed, scenario });
+  UI.selectedOrganismId=null; UI.selectedLineageId=null; UI.selectedNotebookId=null;
+  UI.notebookSignature='';
   const toastHost = $('toasts');
   if (toastHost) toastHost.innerHTML = '';   // a toast from the old run mid-animation would otherwise linger, naming a species that no longer exists
   if ($('seed')) $('seed').value = seed;
@@ -504,6 +662,13 @@ function bindUI(){
     const lab = $('speedLabel');
     if (lab) lab.textContent = state.speedMult + '\u00d7';
   };
+
+  const plains = $('btnExperimentPlains');
+  if (plains) plains.onclick = () => runComparisonScenario('plains');
+  const oasis = $('btnExperimentOasis');
+  if (oasis) oasis.onclick = () => runComparisonScenario('oasis');
+  const capture = $('btnCaptureComparison');
+  if (capture) capture.onclick = captureComparisonResult;
 
   window.addEventListener('resize', () => { fitCanvases(); drawAll(); });
 

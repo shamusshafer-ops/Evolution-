@@ -133,7 +133,10 @@
   button.primary{ flex:1; }
   .chip{ padding:7px 10px; font-size:11px; text-transform:none; letter-spacing:.02em; }
   .chip.on{ border-color:var(--food); color:var(--food); }
-  #scenarios{ display:flex; flex-wrap:wrap; gap:6px; }
+  #scenarios{ display:flex; flex-direction:column; gap:8px; }
+  .scenarioGroup{ display:flex; flex-direction:column; gap:4px; }
+  .scenarioGroupLabel{ color:var(--chalk-dim); font-size:9px; letter-spacing:.13em; text-transform:uppercase; }
+  .scenarioChoices{ display:flex; flex-wrap:wrap; gap:6px; }
   #scenarioBlurb{ margin-top:8px; color:var(--chalk-dim); font-size:11px; line-height:1.5; }
 
   input[type=text]{
@@ -159,6 +162,45 @@
   .sprow.out .spname, .sprow.out .spcount{ color:var(--chalk-dim); text-decoration:line-through; }
   .spname{ flex:1; font-size:11.5px; }
   .spcount{ font-variant-numeric:tabular-nums; font-size:12px; }
+  button.speciesSelect{
+    width:100%; min-height:0; margin:0; color:inherit; background:transparent;
+    border:0; border-bottom:1px solid var(--medium); border-radius:0;
+    text-transform:none; letter-spacing:normal; text-align:left; font-family:inherit;
+  }
+  button.speciesSelect:hover, button.speciesSelect.selected{ background:var(--medium); }
+  button.speciesSelect.selected{ box-shadow:inset 2px 0 0 var(--sense); }
+
+  /* Research and evidence tools */
+  .researchCard{ border-left:2px solid var(--sense); padding-left:9px; }
+  .researchCard h3, #inspector h3{
+    margin:9px 0 5px; color:var(--sense); font-size:9px; letter-spacing:.12em; text-transform:uppercase;
+  }
+  .researchCard p, .comparisonVerdict, .inspectNote, .evidenceLine, .emptyState{
+    margin:5px 0; color:var(--chalk-dim); font-size:10.5px; line-height:1.45;
+  }
+  #comparisonResults{ margin-top:8px; }
+  #comparisonResults p{ margin:3px 0; font-size:10.5px; }
+  .compact{ gap:2px 8px; }
+  .compact dt, .compact dd{ font-size:10.5px; }
+  .inspectHead{ display:flex; align-items:center; gap:7px; margin-bottom:7px; }
+  .inspectHead span:last-child{ margin-left:auto; color:var(--chalk-dim); font-size:10px; }
+  #notebookGrid{ display:grid; grid-template-columns:minmax(125px,.8fr) minmax(0,1.4fr); gap:8px; }
+  #notebookList{ max-height:230px; overflow:auto; border-right:1px solid var(--rule); padding-right:7px; }
+  .notebookEntry{
+    width:100%; min-height:0; display:grid; grid-template-columns:auto 1fr; gap:7px;
+    padding:6px; border:0; border-bottom:1px solid var(--rule); border-radius:0;
+    text-transform:none; letter-spacing:normal; text-align:left; background:transparent;
+  }
+  .notebookEntry:hover, .notebookEntry.selected{ background:var(--well); }
+  .notebookEntry.selected{ box-shadow:inset 2px 0 0 var(--food); }
+  .notebookEntry b{ display:block; font-size:10px; color:var(--chalk); }
+  .notebookEntry small{ display:block; color:var(--chalk-dim); font-size:8.5px; }
+  .notebookTick{ color:var(--sense); font-size:9px; font-variant-numeric:tabular-nums; }
+  .notebookDetailHead{ display:flex; flex-direction:column; gap:3px; }
+  .notebookDetailHead b{ font-size:11px; }
+  .eventKind{ color:var(--food); font-size:8.5px; letter-spacing:.1em; text-transform:uppercase; }
+  #notebookDetail p{ margin:6px 0; font-size:10.5px; line-height:1.45; }
+  @media (max-width:520px){ #notebookGrid{ grid-template-columns:1fr; } #notebookList{ border-right:0; border-bottom:1px solid var(--rule); } }
   #specimenWrap{ position:relative; width:100%; }
   #specimen{ width:100%; height:380px; display:block; border-radius:2px; touch-action:none; cursor:grab; }
   #specimen.dragging{ cursor:grabbing; }
@@ -353,6 +395,40 @@
     </section>
 
     <section class="panel">
+      <h2>Research — controlled comparison</h2>
+      <div class="body researchCard">
+        <h3>Food distribution</h3>
+        <p>Open Plains and Oasis have the same total food supply. Only its spatial
+        distribution differs. Prediction: scattered food favours speed; persistent
+        stands favour sensing range.</p>
+        <div class="row">
+          <button id="btnExperimentPlains" class="chip">Run Plains</button>
+          <button id="btnExperimentOasis" class="chip">Run Oasis</button>
+          <button id="btnCaptureComparison" class="chip">Capture at 6k</button>
+        </div>
+        <div id="comparisonResults" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Field Notebook</h2>
+      <div class="body">
+        <div id="notebookGrid">
+          <div id="notebookList" aria-label="Recorded natural history"></div>
+          <div id="notebookDetail" aria-live="polite"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Organism Inspector</h2>
+      <div class="body" id="inspector">
+        <p class="emptyState">Select a living species or specimen to inspect its real
+        costs and history.</p>
+      </div>
+    </section>
+
+    <section class="panel">
       <h2>Specimens</h2>
       <div class="body" style="padding:6px;">
         <div id="specimenWrap">
@@ -407,9 +483,10 @@
 
     <h3>Reading the screen</h3>
     <ul>
-      <li><b>Specimen well</b> (top) &mdash; organisms as coloured dots. Colour is
-      emergent species (clade), largest population first. Species are not designed
-      in; they're derived from who can still interbreed.</li>
+      <li><b>Specimen well</b> (top) &mdash; real simulated organisms rendered from
+      their inherited traits and anatomy. Bright lineage colour identifies emergent
+      species. Species are not designed in; they're derived from who can still
+      interbreed.</li>
       <li><b>Census strip</b> &mdash; population by species over time. A new coloured
       band appearing is a speciation event happening live.</li>
       <li><b>Drift ribbon</b> &mdash; each trait's distribution across the
@@ -418,8 +495,9 @@
     </ul>
 
     <h3>The traits</h3>
-    <p>Four heritable traits. Three are priced by real biology, not numbers picked
-    to feel balanced:</p>
+    <p>Six continuous heritable traits. Their relationships range from empirical
+    allometry to explicit mechanistic abstractions; coefficients are tuned for this
+    model rather than presented as universal constants:</p>
     <ul>
       <li><b>Speed</b> &mdash; costs mass &times; speed&sup2; (kinetic)</li>
       <li><b>Size</b> &mdash; costs mass<sup>0.75</sup>, Kleiber's law: real
@@ -428,7 +506,16 @@
       tissue</li>
       <li><b>Diet</b> &mdash; which of two resources an organism digests; no
       metabolic cost, the price is opportunity, what it can't eat</li>
+      <li><b>Wariness</b> &mdash; inherited escape ability available from birth</li>
+      <li><b>Plasticity</b> &mdash; costly capacity to learn from survived predator
+      encounters; acquired skill itself is not inherited</li>
     </ul>
+
+    <h3>Your role</h3>
+    <p>You are an ecosystem steward, not a designer of organisms. You may change
+    pressures and environments; mutation remains undirected and the population decides
+    which inherited variants survive. The longer Living History game will take place on
+    a procedural planet with its own geography and contingent natural history.</p>
 
     <h3>How evolution happens here</h3>
     <p>Reproduction is sexual: two parents, real per-trait recombination (not a
